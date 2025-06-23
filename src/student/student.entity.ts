@@ -48,6 +48,16 @@ interface Address {
   zipCode: string;
 }
 
+export type StripeSubscriptionStatus =
+  | 'active'
+  | 'past_due'
+  | 'unpaid'
+  | 'canceled'
+  | 'incomplete'
+  | 'incomplete_expired'
+  | 'trialing'
+  | null; // Added null type
+
 @Entity('students')
 export class Student {
   @PrimaryGeneratedColumn('uuid')
@@ -95,14 +105,19 @@ export class Student {
   @Column({ type: 'text', array: true, default: () => 'ARRAY[]::text[]' })
   enrolledClasses: string[];
 
-  @Column({ type: 'varchar', length: 50 })
+  @Column({ type: 'varchar', length: 50 }) // Assuming this refers to internal plan *type*, not plan ID
   membershipType: MembershipPlan;
 
-  @Column({ type: 'date', nullable: true })
-  startDate: string;
+  // These fields manage the *internal* membership record details
+  @Column({ type: 'uuid', nullable: true })
+  membershipPlanId: string | null; // Link to MembershipPlanDefinitionEntity id
 
   @Column({ type: 'date', nullable: true })
-  renewalDate: string;
+  membershipStartDate: string | null;
+
+  @Column({ type: 'date', nullable: true })
+  membershipRenewalDate: string | null;
+  // Removed startDate and renewalDate as they are now membershipStartDate and membershipRenewalDate
 
   @Column({ type: 'varchar', length: 50, default: 'Activo' })
   status: StudentStatus;
@@ -112,6 +127,31 @@ export class Student {
 
   @Column({ type: 'text', nullable: true })
   personalGoals: string;
+
+  // Stripe specific fields
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'stripe_customer_id',
+  })
+  stripeCustomerId?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'stripe_subscription_id',
+  })
+  stripeSubscriptionId?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+    name: 'stripe_subscription_status',
+  })
+  stripeSubscriptionStatus?: StripeSubscriptionStatus;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt: Date;

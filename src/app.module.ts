@@ -20,6 +20,7 @@ import { ProgramModule } from './program/program.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { MembershipPlanModule } from './membership-plan/membership-plan.module';
+import { StripeModule } from './stripe/stripe.module'; // New StripeModule import
 
 // ¡No necesitas importar las entidades aquí si ya están exportadas en sus respectivos módulos!
 
@@ -64,6 +65,7 @@ import { MembershipPlanModule } from './membership-plan/membership-plan.module';
     EnrollmentModule,
     AttendanceModule,
     MembershipPlanModule,
+    StripeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,3 +1,4 @@
+// src/membership-plan/membership-plan.entity.ts
 import {
   Entity,
   Column,
@@ -13,17 +14,31 @@ export class MembershipPlanDefinitionEntity {
   id: string;
 
   @Column({
-    type: 'varchar', // Changed from enum
-    length: 100, // Added length
+    type: 'varchar',
+    length: 100,
     unique: true,
   })
-  name: MembershipPlanName; // This type is now 'string'
+  name: MembershipPlanName;
 
   @Column({ type: 'int' })
   classesPerWeek: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   monthlyPrice: number;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'int', nullable: true })
+  durationMonths?: number;
+
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'stripe_price_id',
+  })
+  stripePriceId?: string; // Stripe Price ID (e.g., price_xxxxxxxxxxxxxx)
 
   @CreateDateColumn()
   createdAt: Date;
