@@ -1,12 +1,12 @@
-// Reemplaza tu src/app.module.ts con esto:
-
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
-// Importa tus Módulos de funcionalidades
+// Controladores y Servicios Principales
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+
+// Módulos de tu Aplicación
 import { StudentModule } from './student/student.module';
 import { AnnouncementModule } from './announcement/announcement.module';
 import { ClassOfferingModule } from './class-offering/class-offering.module';
@@ -20,38 +20,72 @@ import { ProgramModule } from './program/program.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { MembershipPlanModule } from './membership-plan/membership-plan.module';
-import { StripeModule } from './stripe/stripe.module'; // New StripeModule import
+import { StripeModule } from './stripe/stripe.module';
 
-// ¡No necesitas importar las entidades aquí si ya están exportadas en sus respectivos módulos!
+// ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
+import { Student } from './student/student.entity';
+import { Announcement } from './announcement/announcement.entity';
+import { ClassOffering } from './class-offering/class-offering.entity';
+import { ScheduledClassSlot } from './scheduled-class-slot/scheduled-class-slot.entity';
+import { Absence } from './absence/absence.entity';
+import { SchoolEvent } from './school-event/school-event.entity';
+import { Instructor } from './instructor/instructor.entity';
+import { Role } from './role/role.entity';
+import { AdminUser } from './admin-user/admin-user.entity';
+import { Program } from './program/program.entity';
+import { Enrollment } from './enrollment/enrollment.entity';
+import { AttendanceRecord } from './attendance/attendance.entity';
+import { MembershipPlanDefinitionEntity } from './membership-plan/membership-plan.entity';
 
 @Module({
   imports: [
-    // 1. Módulo de Configuración para leer variables de entorno
+    // Módulo de Configuración para leer variables de entorno (.env)
     ConfigModule.forRoot({
-      isGlobal: true, // Hace que esté disponible en toda la app
+      isGlobal: true,
+      envFilePath: '.env',
     }),
 
-    // 2. Módulo de TypeORM configurado de forma asíncrona y segura
+    // Módulo de TypeORM configurado de forma asíncrona y segura
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         host: configService.get<string>('DB_HOST'),
-        port: parseInt(process.env.DB_PORT || '5432', 10), // Asegúrate de que DB_PORT sea string o '5432'
+        port: parseInt(process.env.DB_PORT || '5432', 10),
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        autoLoadEntities: true, // Esto carga automáticamente las entidades de los módulos importados
-        synchronize: configService.get<string>('NODE_ENV') !== 'production', // Sincroniza solo si no es producción
+
+        // ========= ¡AQUÍ ESTÁ TU LISTA DE ENTIDADES! =========
+        entities: [
+          Student,
+          Announcement,
+          ClassOffering,
+          ScheduledClassSlot,
+          Absence,
+          SchoolEvent,
+          Instructor,
+          Role,
+          AdminUser,
+          Program,
+          Enrollment,
+          AttendanceRecord,
+          MembershipPlanDefinitionEntity,
+        ],
+
+        // Sincroniza la base de datos solo si NO estamos en producción.
+        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+
+        // Activa SSL para la conexión a la base de datos solo en producción.
         ssl:
           configService.get<string>('NODE_ENV') === 'production'
             ? { rejectUnauthorized: false }
-            : false, // Activa SSL solo en producción
+            : false,
       }),
     }),
 
-    // 3. ¡La lista completa de todos tus módulos!
+    // Lista completa de todos tus módulos
     StudentModule,
     AnnouncementModule,
     ClassOfferingModule,
