@@ -1,0 +1,6 @@
+.env
+.git/
+node_modules/ # Si quieres que Beanstalk instale las dependencias en el servidor
+*.log
+tmp/
+# Cualquier otro archivo o carpeta que no sea esencial para la ejecución en producción
