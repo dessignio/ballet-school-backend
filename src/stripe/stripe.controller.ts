@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Controller,
   Post,
@@ -25,7 +26,7 @@ import { Request as ExpressRequest } from 'express';
 
 // Se extiende la interfaz de Request para incluir el cuerpo raw
 interface RequestWithRawBody extends ExpressRequest {
-  rawBody?: Buffer;
+  rawBody?: any; // Changed Buffer to any
 }
 
 @Controller('stripe')

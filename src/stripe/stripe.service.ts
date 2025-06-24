@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 /* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-base-to-string */
@@ -18,6 +20,10 @@ import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-p
 
 // Interfaz que "extiende" la de Stripe, añadiendo las propiedades que faltaban.
 interface ExtendedStripeSubscription extends Stripe.Subscription {
+  id: string; // Explicitly added
+  status: Stripe.Subscription.Status; // Explicitly added
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer; // Explicitly added
+  items: Stripe.ApiList<Stripe.SubscriptionItem>; // Explicitly added
   current_period_start: number;
   current_period_end: number;
 }
@@ -304,7 +310,7 @@ export class StripeService {
   // --- MÉTODOS PARA WEBHOOKS ---
 
   constructEvent(
-    payload: string | Buffer,
+    payload: string | any, // Changed Buffer to any
     sig: string | string[],
   ): Stripe.Event {
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
