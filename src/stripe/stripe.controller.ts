@@ -15,6 +15,7 @@ import {
   HttpStatus,
   BadRequestException,
   InternalServerErrorException,
+  NotFoundException, // ¡Importante! Añadir NotFoundException
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { CreateStripeSubscriptionDto } from './dto';
@@ -46,11 +47,26 @@ export class StripeController {
   }
 
   @Get('students/:studentId/stripe-subscription')
-  getStudentSubscription(
+  // ========= ¡AQUÍ ESTÁ LA CORRECCIÓN! =========
+  async getStudentSubscription(
     @Param('studentId', ParseUUIDPipe) studentId: string,
-  ): Promise<StripeSubscriptionDetails | null> {
-    return this.stripeService.getStudentSubscription(studentId);
+  ): Promise<StripeSubscriptionDetails> {
+    // El tipo de retorno ya no es `| null`
+    const subscription =
+      await this.stripeService.getStudentSubscription(studentId);
+
+    // Si el servicio devuelve null (porque no se encontró la suscripción),
+    // el controlador lanza un error 404 estándar.
+    if (!subscription) {
+      throw new NotFoundException(
+        `No active Stripe subscription found for student with ID ${studentId}`,
+      );
+    }
+
+    // Si la suscripción se encuentra, se devuelve como un JSON válido.
+    return subscription;
   }
+  // ===========================================
 
   @Get('payments')
   getStudentPayments(@Query('studentId', ParseUUIDPipe) studentId: string) {
