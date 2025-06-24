@@ -168,32 +168,6 @@ export class StripeService {
         expand: ['latest_invoice.payment_intent'],
       })) as unknown as ExtendedStripeSubscription;
 
-      // Validate timestamps received from Stripe before processing
-      if (
-        typeof subscription.current_period_start !== 'number' ||
-        isNaN(subscription.current_period_start)
-      ) {
-        console.error(
-          'Stripe subscription created, but current_period_start is invalid:',
-          subscription.current_period_start,
-        );
-        throw new InternalServerErrorException(
-          'Stripe returned an invalid current_period_start timestamp for the new subscription.',
-        );
-      }
-      if (
-        typeof subscription.current_period_end !== 'number' ||
-        isNaN(subscription.current_period_end)
-      ) {
-        console.error(
-          'Stripe subscription created, but current_period_end is invalid:',
-          subscription.current_period_end,
-        );
-        throw new InternalServerErrorException(
-          'Stripe returned an invalid current_period_end timestamp for the new subscription.',
-        );
-      }
-
       student.stripeSubscriptionId = subscription.id;
       student.stripeSubscriptionStatus =
         subscription.status as StripeSubscriptionDetails['status'];
@@ -204,28 +178,51 @@ export class StripeService {
 
       if (plan) {
         student.membershipPlanId = plan.id;
-        student.membershipType = plan.name;
-        student.membershipStartDate = new Date(
-          subscription.current_period_start * 1000,
-        )
-          .toISOString()
-          .split('T')[0];
-        student.membershipRenewalDate = new Date(
-          subscription.current_period_end * 1000,
-        )
-          .toISOString()
-          .split('T')[0];
+        student.membershipType = plan.name; // Ensure this is updated
+
+        // Safely set dates, defaulting to null if Stripe data is invalid
+        if (
+          typeof subscription.current_period_start === 'number' &&
+          !isNaN(subscription.current_period_start)
+        ) {
+          student.membershipStartDate = new Date(
+            subscription.current_period_start * 1000,
+          )
+            .toISOString()
+            .split('T')[0];
+        } else {
+          console.warn(
+            `Stripe subscription ${subscription.id} created, but current_period_start is invalid: ${subscription.current_period_start}. Setting student membershipStartDate to null.`,
+          );
+          student.membershipStartDate = null;
+        }
+
+        if (
+          typeof subscription.current_period_end === 'number' &&
+          !isNaN(subscription.current_period_end)
+        ) {
+          student.membershipRenewalDate = new Date(
+            subscription.current_period_end * 1000,
+          )
+            .toISOString()
+            .split('T')[0];
+        } else {
+          console.warn(
+            `Stripe subscription ${subscription.id} created, but current_period_end is invalid: ${subscription.current_period_end}. Setting student membershipRenewalDate to null.`,
+          );
+          student.membershipRenewalDate = null;
+        }
       } else {
         console.warn(
-          `No local membership plan found for Stripe Price ID: ${priceId}. Student internal membership not updated.`,
+          `No local membership plan found for Stripe Price ID: ${priceId}. Student internal membership details not fully updated.`,
         );
+        student.membershipStartDate = null;
+        student.membershipRenewalDate = null;
       }
 
       await this.studentRepository.save(student);
       return this.mapStripeSubscriptionToDetails(subscription);
     } catch (error) {
-      // If our new timestamp checks throw, they will be caught here.
-      // Otherwise, this catches errors from the Stripe API call itself.
       console.error('Stripe Subscription Creation Error:', error);
       const errorMessage =
         error instanceof Error
@@ -287,40 +284,45 @@ export class StripeService {
         student.stripeSubscriptionId,
       )) as unknown as ExtendedStripeSubscription;
 
-      // Validate timestamps from Stripe
-      if (
-        typeof subscription.current_period_start !== 'number' ||
-        isNaN(subscription.current_period_start)
-      ) {
-        console.error(
-          'Stripe subscription retrieved, but current_period_start is invalid:',
-          subscription.current_period_start,
-        );
-        // Decide handling: throw or log and continue with potentially missing dates
-      }
-      if (
-        typeof subscription.current_period_end !== 'number' ||
-        isNaN(subscription.current_period_end)
-      ) {
-        console.error(
-          'Stripe subscription retrieved, but current_period_end is invalid:',
-          subscription.current_period_end,
-        );
-      }
-
       student.stripeSubscriptionStatus =
         subscription.status as StripeSubscriptionDetails['status'];
-      if (
-        subscription.status === 'active' &&
-        typeof subscription.current_period_end === 'number' &&
-        !isNaN(subscription.current_period_end)
-      ) {
-        student.membershipRenewalDate = new Date(
-          subscription.current_period_end * 1000,
-        )
-          .toISOString()
-          .split('T')[0];
+
+      if (subscription.status === 'active') {
+        if (
+          typeof subscription.current_period_start === 'number' &&
+          !isNaN(subscription.current_period_start)
+        ) {
+          student.membershipStartDate = new Date(
+            subscription.current_period_start * 1000,
+          )
+            .toISOString()
+            .split('T')[0];
+        } else {
+          console.warn(
+            `Retrieved Stripe subscription ${subscription.id}, but current_period_start is invalid: ${subscription.current_period_start}. Student membershipStartDate might be stale.`,
+          );
+          // student.membershipStartDate = null; // Or keep existing if preferred
+        }
+        if (
+          typeof subscription.current_period_end === 'number' &&
+          !isNaN(subscription.current_period_end)
+        ) {
+          student.membershipRenewalDate = new Date(
+            subscription.current_period_end * 1000,
+          )
+            .toISOString()
+            .split('T')[0];
+        } else {
+          console.warn(
+            `Retrieved Stripe subscription ${subscription.id}, but current_period_end is invalid: ${subscription.current_period_end}. Student membershipRenewalDate might be stale.`,
+          );
+          // student.membershipRenewalDate = null; // Or keep existing
+        }
+      } else {
+        // If subscription is not active, local dates might become stale or irrelevant depending on business logic.
+        // For now, we only update renewalDate for active subscriptions.
       }
+
       await this.studentRepository.save(student);
       return this.mapStripeSubscriptionToDetails(subscription);
     } catch (error) {
