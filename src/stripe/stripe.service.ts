@@ -1,8 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-base-to-string */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Injectable,
@@ -18,14 +16,14 @@ import { CreateStripeSubscriptionDto } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 
+// Interfaz que "extiende" la de Stripe, añadiendo las propiedades que faltaban.
+interface ExtendedStripeSubscription extends Stripe.Subscription {
+  current_period_start: number;
+  current_period_end: number;
+}
+
 @Injectable()
 export class StripeService {
-  getInvoicesForStudent(studentId: string) {
-    throw new Error('Method not implemented.');
-  }
-  getPaymentsForStudent(studentId: string) {
-    throw new Error('Method not implemented.');
-  }
   private readonly stripe: Stripe;
 
   constructor(
@@ -38,7 +36,7 @@ export class StripeService {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
     }
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-05-28.basil', // Versión estándar y reciente de la API
+      apiVersion: '2025-05-28.basil',
     });
   }
 
@@ -71,7 +69,7 @@ export class StripeService {
     try {
       return await this.stripe.prices.create({
         product: productId,
-        unit_amount: Math.round(unitAmount * 100), // Convertir dólares a centavos
+        unit_amount: Math.round(unitAmount * 100),
         currency: currency.toLowerCase(),
         recurring: {
           interval: interval,
@@ -158,12 +156,11 @@ export class StripeService {
     }
 
     try {
-      const subscription: Stripe.Subscription =
-        await this.stripe.subscriptions.create({
-          customer: customer.id,
-          items: [{ price: priceId }],
-          expand: ['latest_invoice.payment_intent'],
-        });
+      const subscription = (await this.stripe.subscriptions.create({
+        customer: customer.id,
+        items: [{ price: priceId }],
+        expand: ['latest_invoice.payment_intent'],
+      })) as unknown as ExtendedStripeSubscription;
 
       student.stripeSubscriptionId = subscription.id;
       student.stripeSubscriptionStatus =
@@ -176,14 +173,13 @@ export class StripeService {
       if (plan) {
         student.membershipPlanId = plan.id;
         student.membershipType = plan.name;
-        // CORREGIDO: Se usa una aserción de tipo para evitar el error de TypeScript.
         student.membershipStartDate = new Date(
-          (subscription as any).current_period_start * 1000,
+          subscription.current_period_start * 1000,
         )
           .toISOString()
           .split('T')[0];
         student.membershipRenewalDate = new Date(
-          (subscription as any).current_period_end * 1000,
+          subscription.current_period_end * 1000,
         )
           .toISOString()
           .split('T')[0];
@@ -218,10 +214,13 @@ export class StripeService {
     }
 
     try {
-      const canceledSubscription: Stripe.Subscription =
-        await this.stripe.subscriptions.update(subscriptionId, {
+      const canceledSubscription = (await this.stripe.subscriptions.update(
+        subscriptionId,
+        {
           cancel_at_period_end: true,
-        });
+        },
+      )) as unknown as ExtendedStripeSubscription;
+
       student.stripeSubscriptionStatus =
         canceledSubscription.status as StripeSubscriptionDetails['status'];
       await this.studentRepository.save(student);
@@ -246,14 +245,15 @@ export class StripeService {
     }
 
     try {
-      const subscription: Stripe.Subscription =
-        await this.stripe.subscriptions.retrieve(student.stripeSubscriptionId);
+      const subscription = (await this.stripe.subscriptions.retrieve(
+        student.stripeSubscriptionId,
+      )) as unknown as ExtendedStripeSubscription;
+
       student.stripeSubscriptionStatus =
         subscription.status as StripeSubscriptionDetails['status'];
       if (subscription.status === 'active') {
-        // CORREGIDO: Se usa la misma aserción de tipo aquí.
         student.membershipRenewalDate = new Date(
-          (subscription as any).current_period_end * 1000,
+          subscription.current_period_end * 1000,
         )
           .toISOString()
           .split('T')[0];
@@ -275,6 +275,30 @@ export class StripeService {
         'Could not fetch subscription details.',
       );
     }
+  }
+
+  async getPaymentsForStudent(studentId: string) {
+    const student = await this.studentRepository.findOneBy({ id: studentId });
+    if (!student || !student.stripeCustomerId) {
+      return { data: [] };
+    }
+
+    return this.stripe.paymentIntents.list({
+      customer: student.stripeCustomerId,
+      limit: 100,
+    });
+  }
+
+  async getInvoicesForStudent(studentId: string) {
+    const student = await this.studentRepository.findOneBy({ id: studentId });
+    if (!student || !student.stripeCustomerId) {
+      return { data: [] };
+    }
+
+    return this.stripe.invoices.list({
+      customer: student.stripeCustomerId,
+      limit: 100,
+    });
   }
 
   // --- MÉTODOS PARA WEBHOOKS ---
@@ -333,18 +357,18 @@ export class StripeService {
   private mapStripeSubscriptionToDetails(
     subscription: Stripe.Subscription,
   ): StripeSubscriptionDetails {
+    const extendedSub = subscription as ExtendedStripeSubscription;
     return {
-      id: subscription.id,
-      stripeCustomerId: subscription.customer as string,
-      status: subscription.status as StripeSubscriptionDetails['status'],
+      id: extendedSub.id,
+      stripeCustomerId: extendedSub.customer as string,
+      status: extendedSub.status as StripeSubscriptionDetails['status'],
       items: {
-        data: subscription.items.data.map((item) => ({
+        data: extendedSub.items.data.map((item) => ({
           price: { id: item.price.id },
           quantity: item.quantity,
         })),
       },
-      // CORREGIDO: Se usa la misma aserción de tipo aquí.
-      current_period_end: (subscription as any).current_period_end,
+      current_period_end: extendedSub.current_period_end,
     };
   }
 }
