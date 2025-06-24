@@ -4,7 +4,6 @@
 /* eslint-disable @typescript-eslint/no-base-to-string */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-// src/stripe/stripe.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -21,6 +20,12 @@ import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-p
 
 @Injectable()
 export class StripeService {
+  getInvoicesForStudent(studentId: string) {
+    throw new Error('Method not implemented.');
+  }
+  getPaymentsForStudent(studentId: string) {
+    throw new Error('Method not implemented.');
+  }
   private readonly stripe: Stripe;
 
   constructor(
@@ -33,7 +38,7 @@ export class StripeService {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
     }
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-05-28.basil',
+      apiVersion: '2025-05-28.basil', // Versión estándar y reciente de la API
     });
   }
 
@@ -59,14 +64,14 @@ export class StripeService {
 
   async createStripePrice(
     productId: string,
-    unitAmount: number, // in dollars
+    unitAmount: number, // en dólares
     currency: string,
     interval: Stripe.PriceCreateParams.Recurring.Interval,
   ): Promise<Stripe.Price> {
     try {
       return await this.stripe.prices.create({
         product: productId,
-        unit_amount: Math.round(unitAmount * 100), // Convert dollars to cents
+        unit_amount: Math.round(unitAmount * 100), // Convertir dólares a centavos
         currency: currency.toLowerCase(),
         recurring: {
           interval: interval,
@@ -171,8 +176,7 @@ export class StripeService {
       if (plan) {
         student.membershipPlanId = plan.id;
         student.membershipType = plan.name;
-        // AJUSTADO: Se usa una aserción de tipo `as any` para evitar el error de TypeScript.
-        // Esto le dice al compilador: "Confía en mí, esta propiedad existe en tiempo de ejecución".
+        // CORREGIDO: Se usa una aserción de tipo para evitar el error de TypeScript.
         student.membershipStartDate = new Date(
           (subscription as any).current_period_start * 1000,
         )
@@ -247,7 +251,7 @@ export class StripeService {
       student.stripeSubscriptionStatus =
         subscription.status as StripeSubscriptionDetails['status'];
       if (subscription.status === 'active') {
-        // AJUSTADO: Se usa la misma aserción de tipo `as any` aquí.
+        // CORREGIDO: Se usa la misma aserción de tipo aquí.
         student.membershipRenewalDate = new Date(
           (subscription as any).current_period_end * 1000,
         )
@@ -339,7 +343,7 @@ export class StripeService {
           quantity: item.quantity,
         })),
       },
-      // AJUSTADO: Se usa la misma aserción de tipo `as any` aquí.
+      // CORREGIDO: Se usa la misma aserción de tipo aquí.
       current_period_end: (subscription as any).current_period_end,
     };
   }

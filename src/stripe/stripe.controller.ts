@@ -1,7 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/await-thenable */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-// src/stripe/stripe.controller.ts
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
   Controller,
   Post,
@@ -11,21 +9,24 @@ import {
   Delete,
   Headers,
   Req,
+  Query,
   ParseUUIDPipe,
   UsePipes,
   ValidationPipe,
   HttpCode,
   HttpStatus,
+  BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { CreateStripeSubscriptionDto } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import Stripe from 'stripe';
-import { Request as ExpressRequest } from 'express'; // Import express Request
+import { Request as ExpressRequest } from 'express';
 
-// Define an interface that extends Express Request to include rawBody
+// Se extiende la interfaz de Request para incluir el cuerpo raw
 interface RequestWithRawBody extends ExpressRequest {
-  rawBody?: string; // Changed from any to string
+  rawBody?: Buffer;
 }
 
 @Controller('stripe')
@@ -40,24 +41,33 @@ export class StripeController {
   constructor(private readonly stripeService: StripeService) {}
 
   @Post('subscriptions')
-  async createSubscription(
+  createSubscription(
     @Body() createSubDto: CreateStripeSubscriptionDto,
   ): Promise<StripeSubscriptionDetails> {
     return this.stripeService.createSubscription(createSubDto);
   }
 
-  @Get('/students/:studentId/stripe-subscription')
-  async getStudentSubscription(
+  @Get('students/:studentId/stripe-subscription')
+  getStudentSubscription(
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ): Promise<StripeSubscriptionDetails | null> {
     return this.stripeService.getStudentSubscription(studentId);
   }
 
-  // Matches frontend API_ENDPOINTS.STRIPE_SUBSCRIPTION_CANCEL
+  @Get('payments')
+  getStudentPayments(@Query('studentId', ParseUUIDPipe) studentId: string) {
+    return this.stripeService.getPaymentsForStudent(studentId);
+  }
+
+  @Get('invoices')
+  getStudentInvoices(@Query('studentId', ParseUUIDPipe) studentId: string) {
+    return this.stripeService.getInvoicesForStudent(studentId);
+  }
+
   @Delete('subscriptions/:subscriptionId/cancel')
-  async cancelSubscription(
-    @Param('subscriptionId') subscriptionId: string, // Stripe sub IDs are not UUIDs
-    @Body('studentId', ParseUUIDPipe) studentId: string, // Require studentId in body for verification
+  cancelSubscription(
+    @Param('subscriptionId') subscriptionId: string,
+    @Body('studentId', ParseUUIDPipe) studentId: string,
   ): Promise<StripeSubscriptionDetails> {
     return this.stripeService.cancelSubscription(studentId, subscriptionId);
   }
@@ -66,72 +76,55 @@ export class StripeController {
   @HttpCode(HttpStatus.OK)
   async handleWebhook(
     @Headers('stripe-signature') signature: string,
-    @Req() req: RequestWithRawBody, // Use the extended Request type
+    @Req() req: RequestWithRawBody,
   ) {
     if (!signature) {
-      console.warn('Stripe webhook: Missing stripe-signature header');
-      // Consider returning a 400 Bad Request here, but for Stripe to not retry, often a 200 is preferred.
-      // However, processing should halt.
-      return;
+      throw new BadRequestException('Missing stripe-signature header');
     }
 
-    const rawRequestBody = req.rawBody; // Access rawBody
-
+    const rawRequestBody = req.rawBody;
     if (!rawRequestBody) {
-      console.error(
-        'Stripe webhook: Raw body not available. Ensure rawBody middleware is configured correctly for this route.',
+      throw new InternalServerErrorException(
+        'Raw body not available. Ensure rawBody middleware is configured.',
       );
-      // This indicates a server configuration issue.
-      return; // Avoid processing without raw body
     }
 
     let event: Stripe.Event;
     try {
-      // Stripe expects the raw body as a Buffer or string.
-      // If rawBody is already a string (due to verify in main.ts), it's fine.
-      // If NestJS `rawBody:true` was used and it's a Buffer, also fine.
       event = this.stripeService.constructEvent(rawRequestBody, signature);
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       console.error(
-        `⚠️  Webhook signature verification failed: ${err.message}`,
+        `⚠️  Webhook signature verification failed: ${errorMessage}`,
       );
-      // On error, return a 400 error to Stripe
-      // throw new BadRequestException(`Webhook signature verification failed: ${err.message}`);
-      // Or, to prevent Stripe from retrying with a potentially malformed payload:
-      return; // Acknowledge receipt but don't process.
+      throw new BadRequestException(
+        `Webhook signature verification failed: ${errorMessage}`,
+      );
     }
 
-    // Handle the event
+    // Manejo de eventos
     switch (event.type) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
-        // Handles cancellations, end of trial if not paid, etc.
         const subscription = event.data.object;
         await this.stripeService.handleSubscriptionUpdated(subscription);
         break;
       }
       case 'invoice.payment_succeeded': {
-        const invoicePaymentSucceeded = event.data.object;
-        await this.stripeService.handleInvoicePaymentSucceeded(
-          invoicePaymentSucceeded,
-        );
+        const invoice = event.data.object;
+        await this.stripeService.handleInvoicePaymentSucceeded(invoice);
         break;
       }
       case 'invoice.payment_failed': {
-        const invoicePaymentFailed = event.data.object;
-        await this.stripeService.handleInvoicePaymentFailed(
-          invoicePaymentFailed,
-        );
+        const invoice = event.data.object;
+        await this.stripeService.handleInvoicePaymentFailed(invoice);
         break;
       }
-      // ... handle other event types as needed
       default:
         console.log(`Webhook: Unhandled event type ${event.type}`);
     }
 
-    // Return a 200 response to acknowledge receipt of the event
-    // No specific JSON body is needed, but an object can be returned.
     return { received: true };
   }
 }
