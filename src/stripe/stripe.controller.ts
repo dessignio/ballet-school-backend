@@ -1,6 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/await-thenable */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 // src/stripe/stripe.controller.ts
 import {
   Controller,
@@ -25,7 +25,7 @@ import { Request as ExpressRequest } from 'express'; // Import express Request
 
 // Define an interface that extends Express Request to include rawBody
 interface RequestWithRawBody extends ExpressRequest {
-  rawBody?: string | any; // Replaced Buffer with any
+  rawBody?: string; // Changed from any to string
 }
 
 @Controller('stripe')

@@ -3,13 +3,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Student } from './student.entity';
 import { StudentService } from './student.service';
 import { StudentController } from './student.controller';
-// Aquí importaremos StudentService y StudentController más adelante
+import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity'; // Added import
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Student])],
+  imports: [
+    TypeOrmModule.forFeature([Student, MembershipPlanDefinitionEntity]),
+  ], // Added MembershipPlanDefinitionEntity
   providers: [StudentService],
-  controllers: [StudentController], // Esto hace que StudentRepository esté disponible
-  // controllers: [StudentController], // Descomentaremos esto después
-  // providers: [StudentService],      // Descomentaremos esto después
+  controllers: [StudentController],
 })
 export class StudentModule {}

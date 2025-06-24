@@ -32,12 +32,7 @@ export class MembershipPlanDefinitionEntity {
   @Column({ type: 'int', nullable: true })
   durationMonths?: number;
 
-  @Column({
-    type: 'varchar',
-    length: 255,
-    nullable: true,
-    name: 'stripe_price_id',
-  })
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'stripe_price_id' })
   stripePriceId?: string; // Stripe Price ID (e.g., price_xxxxxxxxxxxxxx)
 
   @CreateDateColumn()

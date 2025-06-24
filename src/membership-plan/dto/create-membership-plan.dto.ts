@@ -6,9 +6,10 @@ import {
   IsNumber,
   Min,
   MaxLength,
-  IsOptional, // Added IsOptional
+  IsOptional,
 } from 'class-validator';
-import { MembershipPlanName } from '../types/membership-plan-name.type';
+// MembershipPlanName type is now just string, direct import for type checking might not be needed
+// import { MembershipPlanName } from '../types/membership-plan-name.type';
 
 export class CreateMembershipPlanDto {
   @IsString({ message: 'Plan name must be a string.' })
@@ -16,7 +17,7 @@ export class CreateMembershipPlanDto {
   @MaxLength(100, {
     message: 'Plan name cannot be longer than 100 characters.',
   })
-  name: MembershipPlanName;
+  name: string; // Was MembershipPlanName
 
   @IsInt({ message: 'Classes per week must be an integer.' })
   @Min(0, { message: 'Classes per week cannot be negative.' })
@@ -43,8 +44,9 @@ export class CreateMembershipPlanDto {
   @Min(1, { message: 'Duration must be at least 1 month if provided.' })
   durationMonths?: number;
 
+  // Stripe Price ID is now truly optional on creation. Backend will handle if not provided.
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  stripePriceId?: string; // Stripe Price ID (e.g., price_xxxxxxxxxxxxxx)
+  stripePriceId?: string;
 }

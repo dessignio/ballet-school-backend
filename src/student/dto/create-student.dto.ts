@@ -1,12 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // src/student/dto/create-student.dto.ts
 import {
   Gender,
   ProgramName,
   DancerLevelName,
-  MembershipPlan,
   StudentStatus,
-} from '../student.entity';
+} from '../student.entity'; // Adjusted path assuming student.entity defines these
 import {
   IsString,
   IsEmail,
@@ -14,45 +12,51 @@ import {
   IsDateString,
   IsEnum,
   IsArray,
-  ArrayNotEmpty,
   MaxLength,
   MinLength,
   Matches,
   IsNotEmpty,
   ValidateNested,
+  IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// Definimos interfaces para los objetos anidados como parte del DTO
 export class EmergencyContactDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   name: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(30)
   phone: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   relationship: string;
 }
 
 export class AddressDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   street: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   city: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100)
   state: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(20)
   zipCode: string;
 }
 
@@ -77,24 +81,31 @@ export class CreateStudentDto {
   })
   username?: string;
 
-  @IsOptional()
-  @IsDateString()
-  dateOfBirth?: string;
+  @IsNotEmpty({ message: 'Date of birth is required.' })
+  @IsDateString(
+    {},
+    { message: 'Date of birth must be a valid date string (YYYY-MM-DD).' },
+  )
+  dateOfBirth: string;
 
   @IsOptional()
-  @IsEnum(['Masculino', 'Femenino', 'Otro', 'Prefiero no decirlo'])
+  @IsEnum(['Masculino', 'Femenino', 'Otro', 'Prefiero no decirlo'], {
+    message: 'Invalid gender value.',
+  })
   gender?: Gender;
 
   @IsOptional()
   @IsString()
+  @MaxLength(2048) // Max length for URLs
   profilePictureUrl?: string;
 
-  @IsEmail()
+  @IsEmail({}, { message: 'A valid email is required.' })
   @MaxLength(255)
+  @IsNotEmpty()
   email: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Password is required for new students.' })
   @MinLength(6, { message: 'Password must be at least 6 characters long' })
   @MaxLength(100)
   password: string;
@@ -115,31 +126,42 @@ export class CreateStudentDto {
   address?: AddressDto;
 
   @IsOptional()
-  @IsString() // Assuming ProgramName is a string for now, adjust if it's a strict enum
+  @IsString()
   program?: ProgramName | null;
 
   @IsOptional()
-  @IsString() // Assuming DancerLevelName is a string
+  @IsString()
   dancerLevel?: DancerLevelName | null;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  enrolledClasses?: string[] = [];
-
-  @IsEnum(['Basic', 'Basic Plus', 'Pro', 'Ultra', 'Complete'])
-  membershipType: MembershipPlan;
+  enrolledClasses?: string[] = []; // Default to empty array
 
   @IsOptional()
-  @IsDateString()
-  startDate?: string;
+  @IsUUID('4', {
+    message: 'membershipPlanId must be a valid UUID if provided.',
+  })
+  membershipPlanId?: string | null;
 
   @IsOptional()
-  @IsDateString()
-  renewalDate?: string;
+  @IsDateString(
+    {},
+    {
+      message:
+        'membershipStartDate must be a valid date string (YYYY-MM-DD) if provided.',
+    },
+  )
+  membershipStartDate?: string | null;
+
+  // membershipType is derived by backend
+  // membershipPlanName is derived by backend
+  // membershipRenewalDate is derived by backend
 
   @IsOptional()
-  @IsEnum(['Activo', 'Inactivo', 'Suspendido'])
+  @IsEnum(['Activo', 'Inactivo', 'Suspendido'], {
+    message: 'Invalid status value.',
+  })
   status?: StudentStatus = 'Activo';
 
   @IsOptional()

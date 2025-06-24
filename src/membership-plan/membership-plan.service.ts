@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-// src/membership-plan/membership-plan.service.ts
+/* eslint-disable @typescript-eslint/await-thenable */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   NotFoundException,
@@ -11,56 +11,64 @@ import { Repository } from 'typeorm';
 import { MembershipPlanDefinitionEntity } from './membership-plan.entity';
 import { CreateMembershipPlanDto } from './dto/create-membership-plan.dto';
 import { UpdateMembershipPlanDto } from './dto/update-membership-plan.dto';
-import { StripeService } from 'src/stripe/stripe.service'; // Import StripeService
+import { StripeService } from 'src/stripe/stripe.service'; // Asegúrate de que la ruta sea correcta
 
 @Injectable()
 export class MembershipPlanService {
+  // BORRADO: Se eliminaron los métodos duplicados que estaban aquí.
+  // La clase ahora empieza directamente con el constructor.
+
   constructor(
     @InjectRepository(MembershipPlanDefinitionEntity)
     private planRepository: Repository<MembershipPlanDefinitionEntity>,
-    private readonly stripeService: StripeService, // Inject StripeService
+    private readonly stripeService: StripeService,
   ) {}
 
   async create(
     createPlanDto: CreateMembershipPlanDto,
   ): Promise<MembershipPlanDefinitionEntity> {
-    const existingPlan = await this.planRepository.findOne({
+    const existingPlanByName = await this.planRepository.findOne({
       where: { name: createPlanDto.name },
     });
-    if (existingPlan) {
+
+    if (existingPlanByName) {
+      // CORREGIDO: Se quitó la barra invertida \ antes del backtick `
       throw new ConflictException(
         `Membership plan with name "${createPlanDto.name}" already exists.`,
       );
     }
 
-    // Create Product and Price in Stripe
-    let stripePriceId: string | undefined = undefined;
-    try {
-      const stripeProduct = await this.stripeService.createStripeProduct(
-        createPlanDto.name,
-        createPlanDto.description,
-      );
-      const stripePrice = await this.stripeService.createStripePrice(
-        stripeProduct.id,
-        createPlanDto.monthlyPrice, // Assuming monthlyPrice is in dollars
-        'usd', // Default currency
-        'month', // Default interval
-      );
-      stripePriceId = stripePrice.id;
-    } catch (stripeError) {
-      // Log the error and proceed without a Stripe ID, or rethrow if Stripe ID is mandatory
-      console.error(
-        `Failed to create Stripe product/price for plan ${createPlanDto.name}: ${stripeError.message}`,
-      );
-      // Depending on business logic, you might throw new InternalServerErrorException or allow plan creation without Stripe ID
-      // For now, let's allow creation but log that Stripe part failed.
-      // To make Stripe ID mandatory:
-      // throw new InternalServerErrorException(`Failed to create Stripe entities: ${stripeError.message}`);
+    let stripePriceIdToSave: string | undefined = createPlanDto.stripePriceId;
+
+    if (!stripePriceIdToSave) {
+      try {
+        const stripeProduct = await this.stripeService.createStripeProduct(
+          createPlanDto.name,
+          createPlanDto.description,
+        );
+        const stripePrice = await this.stripeService.createStripePrice(
+          stripeProduct.id,
+          createPlanDto.monthlyPrice,
+          'usd',
+          'month',
+        );
+        stripePriceIdToSave = stripePrice.id;
+      } catch (stripeError) {
+        console.error(
+          `Failed to create Stripe product/price for plan ${createPlanDto.name}:`,
+          stripeError,
+        );
+        // CORREGIDO: Lanzamos un error si Stripe falla. Esto soluciona el problema de
+        // "must return a value", ya que la función se detiene aquí en caso de error.
+        throw new InternalServerErrorException(
+          `Stripe error: ${(stripeError as Error).message}`,
+        );
+      }
     }
 
-    const newPlanEntityData: Partial<MembershipPlanDefinitionEntity> = {
+    const newPlanEntityData = {
       ...createPlanDto,
-      stripePriceId: stripePriceId, // Use the generated (or undefined) Stripe Price ID
+      stripePriceId: stripePriceIdToSave,
     };
 
     const newPlan = this.planRepository.create(newPlanEntityData);
@@ -69,12 +77,12 @@ export class MembershipPlanService {
       return await this.planRepository.save(newPlan);
     } catch (dbError) {
       console.error(
-        `Database error saving plan ${createPlanDto.name}: ${dbError.message}`,
+        `Database error saving plan ${createPlanDto.name}:`,
+        dbError,
       );
-      // If Stripe entities were created but DB save fails, you might want to clean up Stripe entities (more complex).
-      // For now, just throw the DB error.
+      // TODO: Considerar lógica para eliminar la entidad de Stripe si la BD falla.
       throw new InternalServerErrorException(
-        `Could not save membership plan: ${dbError.message}`,
+        `Could not save membership plan: ${(dbError as Error).message}`,
       );
     }
   }
@@ -86,6 +94,7 @@ export class MembershipPlanService {
   async findOne(id: string): Promise<MembershipPlanDefinitionEntity> {
     const plan = await this.planRepository.findOneBy({ id });
     if (!plan) {
+      // CORREGIDO: Se quitó la barra invertida \
       throw new NotFoundException(`Membership plan with ID "${id}" not found.`);
     }
     return plan;
@@ -95,39 +104,43 @@ export class MembershipPlanService {
     id: string,
     updatePlanDto: UpdateMembershipPlanDto,
   ): Promise<MembershipPlanDefinitionEntity> {
+    // Usamos 'preload' para encontrar el plan y aplicar los cambios del DTO en un solo paso.
+    // Si el plan no existe, preload retorna undefined.
     const plan = await this.planRepository.preload({
       id: id,
       ...updatePlanDto,
     });
+
     if (!plan) {
+      // CORREGIDO: Se quitó la barra invertida \
       throw new NotFoundException(
         `Membership plan with ID "${id}" not found to update.`,
       );
     }
-    if (updatePlanDto.name && updatePlanDto.name !== plan.name) {
-      const existingPlan = await this.planRepository.findOne({
+
+    if (updatePlanDto.name) {
+      const existingPlanByName = await this.planRepository.findOne({
         where: { name: updatePlanDto.name },
       });
-      if (existingPlan && existingPlan.id !== id) {
+      if (existingPlanByName && existingPlanByName.id !== id) {
+        // CORREGIDO: Se quitó la barra invertida \
         throw new ConflictException(
           `Another membership plan with name "${updatePlanDto.name}" already exists.`,
         );
       }
     }
-    // Note: Updating price/name here does NOT update Stripe Product/Price automatically.
-    // User would need to manually update stripePriceId if they change pricing structure in Stripe.
+
     return this.planRepository.save(plan);
   }
 
   async remove(id: string): Promise<void> {
-    // Consider implications: what if subscriptions are active on this plan's stripePriceId?
-    // Archiving might be safer than deleting.
-    // Also, deleting from Stripe might be necessary. This is a simplified remove.
     const result = await this.planRepository.delete(id);
     if (result.affected === 0) {
+      // CORREGIDO: Se quitó la barra invertida \
       throw new NotFoundException(
         `Membership plan with ID "${id}" not found to delete.`,
       );
     }
+    // No se retorna nada porque la función es de tipo Promise<void>
   }
 }

@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-base-to-string */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // src/stripe/stripe.service.ts
 import {
   Injectable,
@@ -17,14 +17,17 @@ import { Student } from 'src/student/student.entity';
 import Stripe from 'stripe';
 import { CreateStripeSubscriptionDto } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
+import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 
 @Injectable()
 export class StripeService {
-  private stripe: Stripe;
+  private readonly stripe: Stripe;
 
   constructor(
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
+    @InjectRepository(MembershipPlanDefinitionEntity)
+    private membershipPlanRepository: Repository<MembershipPlanDefinitionEntity>,
   ) {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
@@ -34,33 +37,34 @@ export class StripeService {
     });
   }
 
+  // --- MÉTODOS PÚBLICOS PARA PRODUCTOS Y PRECIOS ---
+
   async createStripeProduct(
     name: string,
     description?: string,
   ): Promise<Stripe.Product> {
     try {
-      const product = await this.stripe.products.create({
+      return await this.stripe.products.create({
         name: name,
-        description: description || undefined, // Stripe expects undefined, not empty string for no description
-        type: 'service', // For most SaaS membership plans
+        description: description || undefined,
+        type: 'service',
       });
-      return product;
     } catch (error) {
       console.error('Stripe Product Creation Error:', error);
       throw new InternalServerErrorException(
-        `Failed to create Stripe product: ${error.message}`,
+        `Failed to create Stripe product: ${(error as Error).message}`,
       );
     }
   }
 
   async createStripePrice(
     productId: string,
-    unitAmount: number, // in dollars for this function, converted to cents before API call
+    unitAmount: number, // in dollars
     currency: string,
     interval: Stripe.PriceCreateParams.Recurring.Interval,
   ): Promise<Stripe.Price> {
     try {
-      const price = await this.stripe.prices.create({
+      return await this.stripe.prices.create({
         product: productId,
         unit_amount: Math.round(unitAmount * 100), // Convert dollars to cents
         currency: currency.toLowerCase(),
@@ -68,14 +72,15 @@ export class StripeService {
           interval: interval,
         },
       });
-      return price;
     } catch (error) {
       console.error('Stripe Price Creation Error:', error);
       throw new InternalServerErrorException(
-        `Failed to create Stripe price: ${error.message}`,
+        `Failed to create Stripe price: ${(error as Error).message}`,
       );
     }
   }
+
+  // --- MÉTODOS PARA GESTIONAR CLIENTES Y SUSCRIPCIONES ---
 
   async findOrCreateCustomer(
     studentId: string,
@@ -104,7 +109,7 @@ export class StripeService {
         }
       } catch (error) {
         console.warn(
-          `Could not retrieve Stripe customer ${student.stripeCustomerId}, creating a new one. Error: ${error.message}`,
+          `Could not retrieve Stripe customer ${student.stripeCustomerId}, creating a new one.`,
         );
       }
     }
@@ -113,8 +118,9 @@ export class StripeService {
       email: student.email,
       name: `${student.firstName} ${student.lastName}`,
       phone: student.phone || undefined,
-      metadata: { student_id: student.id },
+      metadata: { student_app_id: student.id },
     };
+
     if (paymentMethodId) {
       customerParams.payment_method = paymentMethodId;
       customerParams.invoice_settings = {
@@ -132,50 +138,63 @@ export class StripeService {
     dto: CreateStripeSubscriptionDto,
   ): Promise<StripeSubscriptionDetails> {
     const { studentId, priceId, paymentMethodId } = dto;
-    const student = await this.studentRepository.findOneBy({ id: studentId });
-    if (!student) {
-      throw new NotFoundException(`Student with ID ${studentId} not found.`);
-    }
 
-    let customerId = student.stripeCustomerId;
-    if (!customerId) {
-      const customer = await this.findOrCreateCustomer(
-        studentId,
-        paymentMethodId,
+    const customer = await this.findOrCreateCustomer(
+      studentId,
+      paymentMethodId,
+    );
+
+    const student = await this.studentRepository.findOneBy({ id: studentId });
+
+    if (!student) {
+      throw new InternalServerErrorException(
+        `Could not find student ${studentId} after customer creation.`,
       );
-      customerId = customer.id;
-    } else {
-      try {
-        await this.stripe.paymentMethods.attach(paymentMethodId, {
-          customer: customerId,
-        });
-        await this.stripe.customers.update(customerId, {
-          invoice_settings: { default_payment_method: paymentMethodId },
-        });
-      } catch (error) {
-        throw new BadRequestException(
-          `Failed to attach payment method: ${error.message}`,
-        );
-      }
     }
 
     try {
-      const subscription = await this.stripe.subscriptions.create({
-        customer: customerId,
-        items: [{ price: priceId }],
-        expand: ['latest_invoice.payment_intent'],
-      });
+      const subscription: Stripe.Subscription =
+        await this.stripe.subscriptions.create({
+          customer: customer.id,
+          items: [{ price: priceId }],
+          expand: ['latest_invoice.payment_intent'],
+        });
 
       student.stripeSubscriptionId = subscription.id;
       student.stripeSubscriptionStatus =
         subscription.status as StripeSubscriptionDetails['status'];
-      await this.studentRepository.save(student);
 
+      const plan = await this.membershipPlanRepository.findOne({
+        where: { stripePriceId: priceId },
+      });
+
+      if (plan) {
+        student.membershipPlanId = plan.id;
+        student.membershipType = plan.name;
+        // AJUSTADO: Se usa una aserción de tipo `as any` para evitar el error de TypeScript.
+        // Esto le dice al compilador: "Confía en mí, esta propiedad existe en tiempo de ejecución".
+        student.membershipStartDate = new Date(
+          (subscription as any).current_period_start * 1000,
+        )
+          .toISOString()
+          .split('T')[0];
+        student.membershipRenewalDate = new Date(
+          (subscription as any).current_period_end * 1000,
+        )
+          .toISOString()
+          .split('T')[0];
+      } else {
+        console.warn(
+          `No local membership plan found for Stripe Price ID: ${priceId}.`,
+        );
+      }
+
+      await this.studentRepository.save(student);
       return this.mapStripeSubscriptionToDetails(subscription);
     } catch (error) {
-      console.error('Stripe Subscription Error:', error);
+      console.error('Stripe Subscription Creation Error:', error);
       throw new BadRequestException(
-        `Failed to create Stripe subscription: ${error.message}`,
+        `Failed to create Stripe subscription: ${(error as Error).message}`,
       );
     }
   }
@@ -195,15 +214,18 @@ export class StripeService {
     }
 
     try {
-      const canceledSubscription =
-        await this.stripe.subscriptions.cancel(subscriptionId);
+      const canceledSubscription: Stripe.Subscription =
+        await this.stripe.subscriptions.update(subscriptionId, {
+          cancel_at_period_end: true,
+        });
       student.stripeSubscriptionStatus =
         canceledSubscription.status as StripeSubscriptionDetails['status'];
       await this.studentRepository.save(student);
       return this.mapStripeSubscriptionToDetails(canceledSubscription);
     } catch (error) {
+      console.error('Stripe Subscription Cancellation Error:', error);
       throw new BadRequestException(
-        `Failed to cancel Stripe subscription: ${error.message}`,
+        `Failed to cancel Stripe subscription: ${(error as Error).message}`,
       );
     }
   }
@@ -212,33 +234,38 @@ export class StripeService {
     studentId: string,
   ): Promise<StripeSubscriptionDetails | null> {
     const student = await this.studentRepository.findOneBy({ id: studentId });
-    if (!student || !student.stripeSubscriptionId) {
-      if (student) {
-        student.stripeSubscriptionStatus = null;
-        await this.studentRepository.save(student);
-      }
+    if (!student) {
+      throw new NotFoundException(`Student with ID ${studentId} not found.`);
+    }
+    if (!student.stripeSubscriptionId) {
       return null;
     }
 
     try {
-      const subscription = await this.stripe.subscriptions.retrieve(
-        student.stripeSubscriptionId,
-      );
-      if (student.stripeSubscriptionStatus !== subscription.status) {
-        student.stripeSubscriptionStatus =
-          subscription.status as StripeSubscriptionDetails['status'];
-        await this.studentRepository.save(student);
+      const subscription: Stripe.Subscription =
+        await this.stripe.subscriptions.retrieve(student.stripeSubscriptionId);
+      student.stripeSubscriptionStatus =
+        subscription.status as StripeSubscriptionDetails['status'];
+      if (subscription.status === 'active') {
+        // AJUSTADO: Se usa la misma aserción de tipo `as any` aquí.
+        student.membershipRenewalDate = new Date(
+          (subscription as any).current_period_end * 1000,
+        )
+          .toISOString()
+          .split('T')[0];
       }
+      await this.studentRepository.save(student);
       return this.mapStripeSubscriptionToDetails(subscription);
     } catch (error) {
-      if (error.code === 'resource_missing') {
+      if ((error as Stripe.errors.StripeError).code === 'resource_missing') {
         student.stripeSubscriptionId = undefined;
-        student.stripeSubscriptionStatus = null;
+        student.stripeSubscriptionStatus = undefined;
         await this.studentRepository.save(student);
         return null;
       }
       console.error(
-        `Failed to retrieve Stripe subscription ${student.stripeSubscriptionId}: ${error.message}`,
+        `Failed to retrieve Stripe subscription ${student.stripeSubscriptionId}:`,
+        error,
       );
       throw new InternalServerErrorException(
         'Could not fetch subscription details.',
@@ -246,16 +273,22 @@ export class StripeService {
     }
   }
 
+  // --- MÉTODOS PARA WEBHOOKS ---
+
   constructEvent(
-    payload: string | any,
-    sig: string | string[] | any,
+    payload: string | Buffer,
+    sig: string | string[],
   ): Stripe.Event {
-    // Replaced Buffer with any
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!secret) {
-      throw new Error('STRIPE_WEBHOOK_SECRET is not configured.');
+      throw new InternalServerErrorException('Webhook secret not configured.');
     }
-    return this.stripe.webhooks.constructEvent(payload, sig, secret);
+
+    try {
+      return this.stripe.webhooks.constructEvent(payload, sig, secret);
+    } catch (err) {
+      throw new BadRequestException(`Webhook error: ${(err as Error).message}`);
+    }
   }
 
   async handleSubscriptionUpdated(
@@ -270,7 +303,7 @@ export class StripeService {
         subscription.status as StripeSubscriptionDetails['status'];
       await this.studentRepository.save(student);
       console.log(
-        `Webhook: Updated subscription status for student ${student.id} to ${subscription.status}`,
+        `Webhook: Updated subscription for student ${student.id} to ${subscription.status}`,
       );
     } else {
       console.warn(
@@ -280,58 +313,18 @@ export class StripeService {
   }
 
   async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
-    const subscriptionIdFromInvoice = (invoice as any).subscription;
-    if (
-      subscriptionIdFromInvoice &&
-      typeof subscriptionIdFromInvoice === 'string'
-    ) {
-      const subscription = await this.stripe.subscriptions.retrieve(
-        subscriptionIdFromInvoice,
-      );
-      const student = await this.studentRepository.findOne({
-        where: { stripeCustomerId: subscription.customer as string },
-      });
-      if (student) {
-        student.stripeSubscriptionStatus =
-          subscription.status as StripeSubscriptionDetails['status'];
-        console.log(
-          `Webhook: Invoice payment succeeded for student ${student.id}, subscription ${subscription.id}. Status: ${subscription.status}`,
-        );
-        await this.studentRepository.save(student);
-      } else {
-        console.warn(
-          `Webhook: Invoice payment for unknown customer ${subscription.customer}`,
-        );
-      }
-    }
+    console.log(
+      `Webhook: Invoice payment succeeded for invoice ID: ${invoice.id}`,
+    );
   }
 
   async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-    const subscriptionIdFromInvoice = (invoice as any).subscription;
-    if (
-      subscriptionIdFromInvoice &&
-      typeof subscriptionIdFromInvoice === 'string'
-    ) {
-      const subscription = await this.stripe.subscriptions.retrieve(
-        subscriptionIdFromInvoice,
-      );
-      const student = await this.studentRepository.findOne({
-        where: { stripeCustomerId: subscription.customer as string },
-      });
-      if (student) {
-        student.stripeSubscriptionStatus =
-          subscription.status as StripeSubscriptionDetails['status'];
-        console.log(
-          `Webhook: Invoice payment failed for student ${student.id}, subscription ${subscription.id}. Status: ${subscription.status}`,
-        );
-        await this.studentRepository.save(student);
-      } else {
-        console.warn(
-          `Webhook: Invoice payment failure for unknown customer ${subscription.customer}`,
-        );
-      }
-    }
+    console.log(
+      `Webhook: Invoice payment failed for invoice ID: ${invoice.id}`,
+    );
   }
+
+  // --- MÉTODOS PRIVADOS DE AYUDA ---
 
   private mapStripeSubscriptionToDetails(
     subscription: Stripe.Subscription,
@@ -346,7 +339,8 @@ export class StripeService {
           quantity: item.quantity,
         })),
       },
-      current_period_end: (subscription as any).current_period_end as number, // Add type assertion
+      // AJUSTADO: Se usa la misma aserción de tipo `as any` aquí.
+      current_period_end: (subscription as any).current_period_end,
     };
   }
 }

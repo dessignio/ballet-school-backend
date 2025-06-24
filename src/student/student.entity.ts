@@ -13,8 +13,11 @@ import {
   UpdateDateColumn,
   BeforeInsert,
   BeforeUpdate,
+  ManyToOne, // Added for potential relation to MembershipPlanDefinitionEntity
+  JoinColumn, // Added for potential relation
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity'; // Added import
 
 // Definimos tipos que podrían ser ENUMs en la base de datos o simplemente strings validados.
 export type Gender = 'Masculino' | 'Femenino' | 'Otro' | 'Prefiero no decirlo';
@@ -26,22 +29,16 @@ export type DancerLevelName =
   | 'Explorer 3'
   | 'Deep'
   | string; // Allow string for flexibility
-export type MembershipPlan =
-  | 'Basic'
-  | 'Basic Plus'
-  | 'Pro'
-  | 'Ultra'
-  | 'Complete';
 export type StudentStatus = 'Activo' | 'Inactivo' | 'Suspendido';
 
 // Interface para los objetos JSON anidados
-interface EmergencyContact {
+export interface EmergencyContact {
   name: string;
   phone: string;
   relationship: string;
 }
 
-interface Address {
+export interface Address {
   street: string;
   city: string;
   state: string;
@@ -56,7 +53,7 @@ export type StripeSubscriptionStatus =
   | 'incomplete'
   | 'incomplete_expired'
   | 'trialing'
-  | null; // Added null type
+  | null;
 
 @Entity('students')
 export class Student {
@@ -69,32 +66,32 @@ export class Student {
   @Column({ type: 'varchar', length: 100 })
   lastName: string;
 
-  @Column({ type: 'varchar', length: 100, unique: true, nullable: true }) // Optional username
+  @Column({ type: 'varchar', length: 100, unique: true, nullable: true })
   username?: string;
 
   @Column({ type: 'date', nullable: true })
-  dateOfBirth: string;
+  dateOfBirth: string; // Store as string "YYYY-MM-DD" for simplicity with date inputs
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   gender: Gender;
 
   @Column({ type: 'text', nullable: true })
-  profilePictureUrl: string;
+  profilePictureUrl?: string; // Changed from profilePictureUrl: string
 
   @Column({ type: 'varchar', length: 255, unique: true })
   email: string;
 
-  @Column({ type: 'varchar', length: 255, select: false }) // Password, not selected by default
+  @Column({ type: 'varchar', length: 255, select: false })
   password: string;
 
   @Column({ type: 'varchar', length: 30, nullable: true })
-  phone: string;
+  phone?: string; // Changed from phone: string
 
   @Column({ type: 'jsonb', nullable: true })
-  emergencyContact: EmergencyContact;
+  emergencyContact?: EmergencyContact; // Changed from emergencyContact: EmergencyContact
 
   @Column({ type: 'jsonb', nullable: true })
-  address: Address;
+  address?: Address; // Changed from address: Address
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   program: ProgramName | null;
@@ -102,31 +99,43 @@ export class Student {
   @Column({ type: 'varchar', length: 100, nullable: true })
   dancerLevel: DancerLevelName | null;
 
-  @Column({ type: 'text', array: true, default: () => 'ARRAY[]::text[]' })
+  @Column({ type: 'text', array: true, default: () => "'{}'::text[]" }) // Corrected default for PostgreSQL
   enrolledClasses: string[];
 
-  @Column({ type: 'varchar', length: 50 }) // Assuming this refers to internal plan *type*, not plan ID
-  membershipType: MembershipPlan;
+  // This field is derived by the backend based on membershipPlanId.
+  // It's the name of the plan.
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  membershipType: string | null;
 
-  // These fields manage the *internal* membership record details
   @Column({ type: 'uuid', nullable: true })
-  membershipPlanId: string | null; // Link to MembershipPlanDefinitionEntity id
+  membershipPlanId: string | null;
+
+  // Optional: Define relation if you want to easily access plan details from student
+  @ManyToOne(() => MembershipPlanDefinitionEntity, {
+    nullable: true,
+    eager: false,
+  }) // eager: false to avoid auto-loading
+  @JoinColumn({ name: 'membershipPlanId' })
+  membershipPlan?: MembershipPlanDefinitionEntity;
 
   @Column({ type: 'date', nullable: true })
-  membershipStartDate: string | null;
+  membershipStartDate: string | null; // Store as string "YYYY-MM-DD"
 
+  // This field is derived by the backend.
   @Column({ type: 'date', nullable: true })
-  membershipRenewalDate: string | null;
-  // Removed startDate and renewalDate as they are now membershipStartDate and membershipRenewalDate
+  membershipRenewalDate: string | null; // Store as string "YYYY-MM-DD"
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  membershipPlanName?: string;
 
   @Column({ type: 'varchar', length: 50, default: 'Activo' })
   status: StudentStatus;
 
   @Column({ type: 'text', nullable: true })
-  notes: string;
+  notes?: string; // Changed from notes: string
 
   @Column({ type: 'text', nullable: true })
-  personalGoals: string;
+  personalGoals?: string; // Changed from personalGoals: string
 
   // Stripe specific fields
   @Column({
@@ -162,18 +171,14 @@ export class Student {
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
-    // Only hash if password is provided and is not already hashed (simple check, improve if needed)
-    // This check is basic. A more robust way is to check if it looks like a bcrypt hash.
-    // For new entities or when password is explicitly changed, this.password will be plain text.
     if (this.password && !this.password.startsWith('$2b$')) {
       const saltRounds = 10;
       this.password = await bcrypt.hash(this.password, saltRounds);
     }
   }
 
-  // Optional: Method to validate password (useful in auth strategies)
   async validatePassword(password: string): Promise<boolean> {
-    if (!this.password) return false; // No password set
+    if (!this.password) return false;
     return bcrypt.compare(password, this.password);
   }
 }

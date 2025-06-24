@@ -4,14 +4,7 @@
 // but might be expanded with more fields from actual Stripe API responses.
 export interface StripeSubscriptionDetails {
   id: string; // Stripe Subscription ID (e.g., sub_xxxx)
-  status:
-    | 'active'
-    | 'past_due'
-    | 'unpaid'
-    | 'canceled'
-    | 'incomplete'
-    | 'incomplete_expired'
-    | 'trialing';
+  status: 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing';
   stripeCustomerId: string;
   items: {
     data: {
