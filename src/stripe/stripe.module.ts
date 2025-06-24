@@ -4,14 +4,19 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { StripeService } from './stripe.service';
 import { StripeController } from './stripe.controller';
 import { Student } from 'src/student/student.entity';
-// Potentially import MembershipPlan entity if you need to map Stripe Price IDs to local plans
+import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Student]), // And MembershipPlan if needed
+    // ========= ¡AQUÍ ESTÁ LA CORRECCIÓN! =========
+    // Debes registrar TODAS las entidades cuyos repositorios vas a inyectar en este módulo.
+    // StripeService necesita tanto Student como MembershipPlanDefinitionEntity.
+    TypeOrmModule.forFeature([Student, MembershipPlanDefinitionEntity]),
+    // ===========================================
   ],
   controllers: [StripeController],
   providers: [StripeService],
-  exports: [StripeService], // Export if other modules need to use StripeService
+  // Exportamos el servicio si otros módulos necesitan usarlo
+  exports: [StripeService],
 })
 export class StripeModule {}
