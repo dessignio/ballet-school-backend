@@ -21,6 +21,8 @@ import { EnrollmentModule } from './enrollment/enrollment.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { MembershipPlanModule } from './membership-plan/membership-plan.module';
 import { StripeModule } from './stripe/stripe.module';
+import { PaymentModule } from './payment/payment.module'; // Added PaymentModule
+import { InvoiceModule } from './invoice/invoice.module'; // Added InvoiceModule
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -36,6 +38,8 @@ import { Program } from './program/program.entity';
 import { Enrollment } from './enrollment/enrollment.entity';
 import { AttendanceRecord } from './attendance/attendance.entity';
 import { MembershipPlanDefinitionEntity } from './membership-plan/membership-plan.entity';
+import { Payment } from './payment/payment.entity'; // Added Payment Entity
+import { Invoice } from './invoice/invoice.entity'; // Added Invoice Entity
 
 @Module({
   imports: [
@@ -72,6 +76,8 @@ import { MembershipPlanDefinitionEntity } from './membership-plan/membership-pla
           Enrollment,
           AttendanceRecord,
           MembershipPlanDefinitionEntity,
+          Payment, // Added Payment Entity
+          Invoice, // Added Invoice Entity
         ],
 
         // Sincroniza la base de datos solo si NO estamos en producción.
@@ -100,6 +106,8 @@ import { MembershipPlanDefinitionEntity } from './membership-plan/membership-pla
     AttendanceModule,
     MembershipPlanModule,
     StripeModule,
+    PaymentModule, // Added PaymentModule
+    InvoiceModule, // Added InvoiceModule
   ],
   controllers: [AppController],
   providers: [AppService],
