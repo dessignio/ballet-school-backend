@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/await-thenable */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Controller,
@@ -16,17 +17,21 @@ import {
   HttpStatus,
   BadRequestException,
   InternalServerErrorException,
-  NotFoundException, // ¡Importante! Añadir NotFoundException
+  NotFoundException,
+  Res, // Import Res decorator
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { CreateStripeSubscriptionDto } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import Stripe from 'stripe';
-import { Request as ExpressRequest } from 'express';
+import {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from 'express'; // Import Response
 
 // Se extiende la interfaz de Request para incluir el cuerpo raw
 interface RequestWithRawBody extends ExpressRequest {
-  rawBody?: any; // Changed Buffer to any
+  rawBody?: any;
 }
 
 @Controller('stripe')
@@ -48,26 +53,34 @@ export class StripeController {
   }
 
   @Get('students/:studentId/stripe-subscription')
-  // ========= ¡AQUÍ ESTÁ LA CORRECCIÓN! =========
   async getStudentSubscription(
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ): Promise<StripeSubscriptionDetails> {
-    // El tipo de retorno ya no es `| null`
     const subscription =
       await this.stripeService.getStudentSubscription(studentId);
 
-    // Si el servicio devuelve null (porque no se encontró la suscripción),
-    // el controlador lanza un error 404 estándar.
     if (!subscription) {
       throw new NotFoundException(
         `No active Stripe subscription found for student with ID ${studentId}`,
       );
     }
-
-    // Si la suscripción se encuentra, se devuelve como un JSON válido.
     return subscription;
   }
-  // ===========================================
+
+  @Get('invoices/:invoiceId/pdf')
+  async getInvoicePdf(
+    @Param('invoiceId') invoiceId: string,
+    @Res() res: ExpressResponse,
+  ): Promise<void> {
+    const pdfUrl = await this.stripeService.getInvoicePdfUrl(invoiceId);
+    if (pdfUrl) {
+      res.redirect(303, pdfUrl);
+    } else {
+      throw new NotFoundException(
+        `Invoice PDF not found for ID "${invoiceId}" or invoice does not exist.`,
+      );
+    }
+  }
 
   @Get('payments')
   getStudentPayments(@Query('studentId', ParseUUIDPipe) studentId: string) {
@@ -117,7 +130,6 @@ export class StripeController {
       );
     }
 
-    // Manejo de eventos
     switch (event.type) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':

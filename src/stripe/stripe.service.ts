@@ -46,6 +46,38 @@ export class StripeService {
     });
   }
 
+  // --- IMPLEMENTACIÓN CORREGIDA ---
+  /**
+   * Retrieves the publicly-accessible URL for an invoice's PDF.
+   * @param invoiceId The ID of the Stripe invoice.
+   * @returns A promise that resolves to the URL string, or null if the invoice is not ready or not found.
+   */
+  async getInvoicePdfUrl(invoiceId: string): Promise<string | null> {
+    try {
+      // Retrieve the invoice object from Stripe
+      const invoice = await this.stripe.invoices.retrieve(invoiceId);
+      // The `invoice_pdf` property contains the URL to the PDF.
+      // This can be null or undefined if the invoice has not been finalized.
+      // We use the nullish coalescing operator (??) to return null if it's undefined.
+      return invoice.invoice_pdf ?? null;
+    } catch (error) {
+      // If the invoice ID does not exist, Stripe will throw a 'resource_missing' error.
+      if ((error as Stripe.errors.StripeError).code === 'resource_missing') {
+        console.warn(`Invoice with ID ${invoiceId} not found in Stripe.`);
+        // Return null as the controller will handle this as a NotFoundException.
+        return null;
+      }
+      // For any other errors, log them and throw a server exception.
+      console.error(
+        `Error fetching invoice PDF URL from Stripe for invoice ${invoiceId}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to retrieve invoice PDF URL.',
+      );
+    }
+  }
+
   // --- MÉTODOS PÚBLICOS PARA PRODUCTOS Y PRECIOS ---
 
   async createStripeProduct(
