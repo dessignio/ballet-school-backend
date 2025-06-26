@@ -1,5 +1,6 @@
 // src/stripe/stripe.module.ts
 import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios'; // <--- Importa esto
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StripeService } from './stripe.service';
 import { StripeController } from './stripe.controller';
@@ -12,6 +13,7 @@ import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-p
     // Debes registrar TODAS las entidades cuyos repositorios vas a inyectar en este módulo.
     // StripeService necesita tanto Student como MembershipPlanDefinitionEntity.
     TypeOrmModule.forFeature([Student, MembershipPlanDefinitionEntity]),
+    HttpModule,
     // ===========================================
   ],
   controllers: [StripeController],

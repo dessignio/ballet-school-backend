@@ -17,7 +17,8 @@ import {
   BadRequestException,
   InternalServerErrorException,
   NotFoundException,
-  Res, // Import Res decorator
+  Res,
+  StreamableFile, // Import Res decorator
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { CreateStripeSubscriptionDto } from './dto';
@@ -69,16 +70,23 @@ export class StripeController {
   @Get('invoices/:invoiceId/pdf')
   async getInvoicePdf(
     @Param('invoiceId') invoiceId: string,
-    @Res() res: ExpressResponse,
-  ): Promise<void> {
-    const pdfUrl = await this.stripeService.getInvoicePdfUrl(invoiceId);
-    if (pdfUrl) {
-      res.redirect(303, pdfUrl);
-    } else {
+    @Res({ passthrough: true }) res: ExpressResponse,
+  ): Promise<StreamableFile> {
+    const pdfStream = await this.stripeService.streamInvoicePdf(invoiceId);
+
+    if (!pdfStream) {
       throw new NotFoundException(
-        `Invoice PDF not found for ID "${invoiceId}" or invoice does not exist.`,
+        `Invoice PDF not found for ID "${invoiceId}" or invoice is not finalized.`,
       );
     }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="invoice-${invoiceId}.pdf"`,
+    );
+
+    return new StreamableFile(pdfStream);
   }
 
   @Get('payments')

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 /* eslint-disable @typescript-eslint/require-await */
@@ -17,6 +18,9 @@ import Stripe from 'stripe';
 import { CreateStripeSubscriptionDto } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+import { Readable } from 'stream';
 
 // Interfaz que "extiende" la de Stripe, añadiendo las propiedades que faltaban.
 interface ExtendedStripeSubscription extends Stripe.Subscription {
@@ -37,6 +41,7 @@ export class StripeService {
     private studentRepository: Repository<Student>,
     @InjectRepository(MembershipPlanDefinitionEntity)
     private membershipPlanRepository: Repository<MembershipPlanDefinitionEntity>,
+    private readonly httpService: HttpService, // Inyectar HttpService
   ) {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
@@ -48,32 +53,45 @@ export class StripeService {
 
   // --- IMPLEMENTACIÓN CORREGIDA ---
   /**
-   * Retrieves the publicly-accessible URL for an invoice's PDF.
+   * Downloads an invoice PDF from Stripe and returns it as a readable stream.
+   * This method acts as a proxy to avoid CORS issues on the frontend.
    * @param invoiceId The ID of the Stripe invoice.
-   * @returns A promise that resolves to the URL string, or null if the invoice is not ready or not found.
+   * @returns A promise that resolves to a Readable stream of the PDF, or null if not found.
    */
-  async getInvoicePdfUrl(invoiceId: string): Promise<string | null> {
+  async streamInvoicePdf(invoiceId: string): Promise<Readable | null> {
     try {
       // Retrieve the invoice object from Stripe
       const invoice = await this.stripe.invoices.retrieve(invoiceId);
-      // The `invoice_pdf` property contains the URL to the PDF.
-      // This can be null or undefined if the invoice has not been finalized.
-      // We use the nullish coalescing operator (??) to return null if it's undefined.
-      return invoice.invoice_pdf ?? null;
-    } catch (error) {
-      // If the invoice ID does not exist, Stripe will throw a 'resource_missing' error.
-      if ((error as Stripe.errors.StripeError).code === 'resource_missing') {
-        console.warn(`Invoice with ID ${invoiceId} not found in Stripe.`);
-        // Return null as the controller will handle this as a NotFoundException.
+      const pdfUrl = invoice.invoice_pdf;
+
+      // If the URL is not available, the invoice might not be finalized.
+      if (!pdfUrl) {
+        console.warn(
+          `Invoice PDF URL not available for invoice ${invoiceId}. It may not be finalized.`,
+        );
         return null;
       }
-      // For any other errors, log them and throw a server exception.
+
+      // Fetch the PDF from the URL as a stream using the HttpService
+      const response = await firstValueFrom(
+        this.httpService.get(pdfUrl, { responseType: 'stream' }),
+      );
+
+      return response.data;
+    } catch (error) {
+      // Handle cases where the invoice doesn't exist in Stripe
+      if ((error as Stripe.errors.StripeError).code === 'resource_missing') {
+        console.warn(`Invoice with ID ${invoiceId} not found in Stripe.`);
+        return null;
+      }
+
+      // Handle other errors
       console.error(
-        `Error fetching invoice PDF URL from Stripe for invoice ${invoiceId}:`,
+        `Error fetching invoice PDF from Stripe for invoice ${invoiceId}:`,
         error,
       );
       throw new InternalServerErrorException(
-        'Failed to retrieve invoice PDF URL.',
+        'Failed to retrieve invoice PDF from Stripe.',
       );
     }
   }
