@@ -153,7 +153,7 @@ export class StudentService {
       if (membershipPlanId === null) {
         studentToUpdate.membershipPlanId = null;
         studentToUpdate.membershipType = null;
-        studentToUpdate.membershipPlanName = null;
+        studentToUpdate.membershipPlanName = undefined;
         studentToUpdate.membershipStartDate = null;
         studentToUpdate.membershipRenewalDate = null;
       } else {

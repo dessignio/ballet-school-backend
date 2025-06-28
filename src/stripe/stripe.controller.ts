@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Controller,
@@ -18,7 +19,6 @@ import {
   InternalServerErrorException,
   NotFoundException,
   Res,
-  StreamableFile, // Import Res decorator
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { CreateStripeSubscriptionDto } from './dto';
@@ -27,9 +27,8 @@ import Stripe from 'stripe';
 import {
   Request as ExpressRequest,
   Response as ExpressResponse,
-} from 'express'; // Import Response
+} from 'express';
 
-// Se extiende la interfaz de Request para incluir el cuerpo raw
 interface RequestWithRawBody extends ExpressRequest {
   rawBody?: any;
 }
@@ -70,23 +69,16 @@ export class StripeController {
   @Get('invoices/:invoiceId/pdf')
   async getInvoicePdf(
     @Param('invoiceId') invoiceId: string,
-    @Res({ passthrough: true }) res: ExpressResponse,
-  ): Promise<StreamableFile> {
-    const pdfStream = await this.stripeService.streamInvoicePdf(invoiceId);
-
-    if (!pdfStream) {
+    @Res() res: ExpressResponse,
+  ): Promise<void> {
+    const pdfUrl = await this.stripeService.getInvoicePdfUrl(invoiceId);
+    if (pdfUrl) {
+      res.redirect(303, pdfUrl);
+    } else {
       throw new NotFoundException(
-        `Invoice PDF not found for ID "${invoiceId}" or invoice is not finalized.`,
+        `Invoice PDF not found for ID "${invoiceId}" or invoice does not exist.`,
       );
     }
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="invoice-${invoiceId}.pdf"`,
-    );
-
-    return new StreamableFile(pdfStream);
   }
 
   @Get('payments')
@@ -100,11 +92,20 @@ export class StripeController {
   }
 
   @Delete('subscriptions/:subscriptionId/cancel')
-  cancelSubscription(
+  async cancelSubscription(
     @Param('subscriptionId') subscriptionId: string,
     @Body('studentId', ParseUUIDPipe) studentId: string,
   ): Promise<StripeSubscriptionDetails> {
-    return this.stripeService.cancelSubscription(studentId, subscriptionId);
+    const subscription = await this.stripeService.cancelSubscription(
+      studentId,
+      subscriptionId,
+    );
+    if (!subscription) {
+      throw new InternalServerErrorException(
+        'Failed to get subscription details after cancellation.',
+      );
+    }
+    return subscription;
   }
 
   @Post('webhooks')
