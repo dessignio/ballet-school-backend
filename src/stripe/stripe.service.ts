@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -42,7 +43,8 @@ export class StripeService {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
     }
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-05-28.basil', // Use a stable, recent API version
+      // @ts-ignore
+      apiVersion: '2024-06-20', // Use a stable, recent API version
     });
   }
 
