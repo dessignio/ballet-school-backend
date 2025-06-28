@@ -4,7 +4,14 @@
 // but might be expanded with more fields from actual Stripe API responses.
 export interface StripeSubscriptionDetails {
   id: string; // Stripe Subscription ID (e.g., sub_xxxx)
-  status: 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing';
+  status:
+    | 'active'
+    | 'past_due'
+    | 'unpaid'
+    | 'canceled'
+    | 'incomplete'
+    | 'incomplete_expired'
+    | 'trialing';
   stripeCustomerId: string;
   items: {
     data: {
@@ -14,6 +21,8 @@ export interface StripeSubscriptionDetails {
       quantity?: number;
     }[];
   };
+  current_period_start: number; // ADDED
   current_period_end: number; // Unix timestamp
-  // Add other relevant fields as needed, e.g., cancel_at_period_end: boolean;
+  cancel_at_period_end: boolean; // ADDED
+  clientSecret?: string | null;
 }

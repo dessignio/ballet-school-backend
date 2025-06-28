@@ -74,6 +74,24 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   @Type(() => AddressDto) // <-- Ahora usamos la CLASE AddressDto
   address?: AddressDto;
 
+  // Explicitly define potentially problematic fields from CreateStudentDto
+  // to ensure they are recognized on UpdateStudentDto by the type checker.
+  @IsOptional()
+  @IsUUID('4', {
+    message: 'membershipPlanId must be a valid UUID if provided.',
+  })
+  membershipPlanId?: string | null;
+
+  @IsOptional()
+  @IsDateString(
+    {},
+    {
+      message:
+        'membershipStartDate must be a valid date string (YYYY-MM-DD) if provided.',
+    },
+  )
+  membershipStartDate?: string | null;
+
   // El resto de tus propiedades heredadas funcionan como antes.
   // No necesitas redeclararlas a menos que quieras cambiar las reglas de validación.
 }

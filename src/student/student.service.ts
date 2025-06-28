@@ -20,8 +20,6 @@ export type SafeStudent = Omit<
 
 @Injectable()
 export class StudentService {
-  // BORRADO: Se eliminaron los métodos duplicados 'findOne' y 'findAll' de aquí.
-
   constructor(
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
@@ -99,6 +97,7 @@ export class StudentService {
       }
       // Asignamos las propiedades del plan al nuevo estudiante
       newStudent.membershipType = plan.name;
+      newStudent.membershipPlanName = plan.name;
       const actualStartDate =
         membershipStartDate || new Date().toISOString().split('T')[0];
       newStudent.membershipStartDate = actualStartDate;
@@ -139,8 +138,6 @@ export class StudentService {
     id: string,
     updateStudentDto: UpdateStudentDto,
   ): Promise<SafeStudent> {
-    // Usamos 'preload' para cargar la entidad y aplicar los cambios del DTO.
-    // Es más seguro y eficiente que 'findOne' seguido de 'Object.assign'.
     const studentToUpdate = await this.studentRepository.preload({
       id: id,
       ...updateStudentDto,
@@ -150,18 +147,16 @@ export class StudentService {
       throw new NotFoundException(`Student with ID "${id}" not found.`);
     }
 
-    // Lógica para actualizar la membresía si se proporciona el ID del plan
     const { membershipPlanId, membershipStartDate } = updateStudentDto;
 
     if (membershipPlanId !== undefined) {
       if (membershipPlanId === null) {
-        // Si se quiere quitar la membresía
         studentToUpdate.membershipPlanId = null;
         studentToUpdate.membershipType = null;
+        studentToUpdate.membershipPlanName = null;
         studentToUpdate.membershipStartDate = null;
         studentToUpdate.membershipRenewalDate = null;
       } else {
-        // Si se asigna o cambia un plan
         const plan = await this.membershipPlanRepository.findOneBy({
           id: membershipPlanId,
         });
@@ -172,9 +167,11 @@ export class StudentService {
         }
         studentToUpdate.membershipPlanId = plan.id;
         studentToUpdate.membershipType = plan.name;
-        // Si se cambia el plan, se debe actualizar la fecha de inicio y renovación
+        studentToUpdate.membershipPlanName = plan.name;
         const actualStartDate =
-          membershipStartDate || new Date().toISOString().split('T')[0];
+          membershipStartDate ||
+          studentToUpdate.membershipStartDate ||
+          new Date().toISOString().split('T')[0];
         studentToUpdate.membershipStartDate = actualStartDate;
         studentToUpdate.membershipRenewalDate = this.calculateRenewalDate(
           actualStartDate,
@@ -182,7 +179,6 @@ export class StudentService {
         );
       }
     } else if (membershipStartDate && studentToUpdate.membershipPlanId) {
-      // Si solo cambia la fecha de inicio para un plan existente
       const plan = await this.membershipPlanRepository.findOneBy({
         id: studentToUpdate.membershipPlanId,
       });
@@ -217,16 +213,4 @@ export class StudentService {
       );
     }
   }
-
-  // Este método parece redundante si `update` ya maneja la lógica de membresía.
-  // Se puede mantener si tienes una UI que solo actualiza esta parte.
-  // async updateStudentMembershipInfo(
-  //   studentId: string,
-  //   membershipPlanId: string | null,
-  //   membershipStartDate?: string | null,
-  // ): Promise<SafeStudent> {
-  //   // La lógica de este método ahora está integrada en el método `update` principal.
-  //   // Se podría llamar a `update` desde aquí con un DTO parcial.
-  //   return this.update(studentId, { membershipPlanId, membershipStartDate });
-  // }
 }
