@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable @typescript-eslint/require-await */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/no-base-to-string */
@@ -363,26 +363,122 @@ export class StripeService {
     }
   }
 
-  async getPaymentsForStudent(studentId: string) {
+  async getPaymentsForStudent(studentId: string): Promise<Payment[]> {
     const student = await this.studentRepository.findOneBy({ id: studentId });
     if (!student || !student.stripeCustomerId) {
-      return [];
+      // Return local DB results if no Stripe customer ID is present (for manual payments)
+      return this.paymentRepository.find({
+        where: { studentId },
+        order: { paymentDate: 'DESC' },
+      });
     }
-    return this.paymentRepository.find({
-      where: { studentId },
-      order: { paymentDate: 'DESC' },
-    });
+
+    try {
+      this.logger.log(
+        `Fetching Stripe payments for customer ID: ${student.stripeCustomerId}`,
+      );
+      const paymentIntents = await this.stripe.paymentIntents.list({
+        customer: student.stripeCustomerId,
+        limit: 100, // You might want to handle pagination for more than 100 payments
+      });
+
+      // Map Stripe PaymentIntents to our local Payment structure
+      const stripePayments: Payment[] = paymentIntents.data.map((pi) => {
+        return {
+          id: pi.id,
+          studentId: student.id,
+          studentName: `${student.firstName} ${student.lastName}`,
+          membershipPlanId: null, // This is hard to determine from a PaymentIntent alone
+          membershipPlanName: pi.description || 'Stripe Payment',
+          amountPaid: pi.amount_received / 100,
+          paymentDate: new Date(pi.created * 1000).toISOString().split('T')[0],
+          paymentMethod:
+            (pi.payment_method_types?.[0]?.replace(
+              '_',
+              ' ',
+            ) as PaymentMethod) || 'Credit Card',
+          transactionId: pi.id,
+          invoiceId:
+            typeof (pi as any).invoice === 'string'
+              ? (pi as any).invoice
+              : null,
+        } as unknown as Payment;
+      });
+
+      return stripePayments;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch Stripe payments for customer ${student.stripeCustomerId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      // Fallback to local data if Stripe API fails
+      return this.paymentRepository.find({
+        where: { studentId },
+        order: { paymentDate: 'DESC' },
+      });
+    }
   }
 
-  async getInvoicesForStudent(studentId: string) {
+  async getInvoicesForStudent(studentId: string): Promise<Invoice[]> {
     const student = await this.studentRepository.findOneBy({ id: studentId });
-    if (!student) {
-      return [];
+    if (!student || !student.stripeCustomerId) {
+      // Return local DB results if no Stripe customer ID is present (for manual invoices)
+      return this.invoiceRepository.find({
+        where: { studentId },
+        order: { issueDate: 'DESC' },
+      });
     }
-    return this.invoiceRepository.find({
-      where: { studentId },
-      order: { issueDate: 'DESC' },
-    });
+
+    try {
+      this.logger.log(
+        `Fetching Stripe invoices for customer ID: ${student.stripeCustomerId}`,
+      );
+      const stripeInvoicesData = await this.stripe.invoices.list({
+        customer: student.stripeCustomerId,
+        limit: 100, // Handle pagination if needed
+      });
+
+      const stripeInvoices: Invoice[] = stripeInvoicesData.data.map((inv) => {
+        return {
+          id: inv.id,
+          studentId: student.id,
+          studentName: `${student.firstName} ${student.lastName}`,
+          invoiceNumber: inv.number || inv.id,
+          issueDate: new Date(inv.created * 1000).toISOString().split('T')[0],
+          dueDate: inv.due_date
+            ? new Date(inv.due_date * 1000).toISOString().split('T')[0]
+            : 'N/A',
+          items: inv.lines.data.map((line) => ({
+            id: line.id,
+            description: line.description || 'N/A',
+            quantity: line.quantity || 1,
+            unitPrice: (line as any).price?.unit_amount_decimal
+              ? parseFloat((line as any).price.unit_amount_decimal) / 100
+              : line.amount / 100 / (line.quantity || 1),
+            amount: line.amount / 100,
+          })) as InvoiceItem[],
+          subtotal: inv.subtotal / 100,
+          taxAmount: ((inv as any).tax || 0) / 100,
+          totalAmount: inv.total / 100,
+          amountPaid: inv.amount_paid / 100,
+          amountDue: inv.amount_due / 100,
+          status: (inv.status as InvoiceStatus) || 'Draft',
+          stripeInvoiceId: inv.id,
+        } as unknown as Invoice;
+      });
+
+      return stripeInvoices;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch Stripe invoices for customer ${student.stripeCustomerId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      // Fallback to local DB if Stripe API fails
+      return this.invoiceRepository.find({
+        where: { studentId },
+        order: { issueDate: 'DESC' },
+      });
+    }
   }
 
   async getInvoicePdfUrl(invoiceId: string): Promise<string | null> {
