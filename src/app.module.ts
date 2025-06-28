@@ -80,8 +80,10 @@ import { Invoice } from './invoice/invoice.entity'; // Added Invoice Entity
           Invoice, // Added Invoice Entity
         ],
 
-        // Sincroniza la base de datos solo si NO estamos en producción.
-        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        // Sincroniza la base de datos.
+        // ADVERTENCIA: En producción, es más seguro usar migraciones.
+        // Para este entorno, forzamos la sincronización para crear las tablas faltantes.
+        synchronize: true,
 
         // Activa SSL para la conexión a la base de datos solo en producción.
         ssl:
