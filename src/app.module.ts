@@ -24,6 +24,7 @@ import { StripeModule } from './stripe/stripe.module';
 import { PaymentModule } from './payment/payment.module'; // Added PaymentModule
 import { InvoiceModule } from './invoice/invoice.module'; // Added InvoiceModule
 import { GeneralSettingsModule } from './general-settings/general-settings.module';
+import { CalendarSettingsModule } from './calendar-settings/calendar-settings.module';
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -42,6 +43,7 @@ import { MembershipPlanDefinitionEntity } from './membership-plan/membership-pla
 import { Payment } from './payment/payment.entity'; // Added Payment Entity
 import { Invoice } from './invoice/invoice.entity'; // Added Invoice Entity
 import { GeneralSettings } from './general-settings/general-settings.entity';
+import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
 
 @Module({
   imports: [
@@ -81,6 +83,7 @@ import { GeneralSettings } from './general-settings/general-settings.entity';
           Payment, // Added Payment Entity
           Invoice, // Added Invoice Entity
           GeneralSettings,
+          CalendarSettings,
         ],
 
         // Sincroniza la base de datos.
@@ -114,6 +117,7 @@ import { GeneralSettings } from './general-settings/general-settings.entity';
     PaymentModule, // Added PaymentModule
     InvoiceModule, // Added InvoiceModule
     GeneralSettingsModule,
+    CalendarSettingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
