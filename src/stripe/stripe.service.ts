@@ -18,7 +18,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Student, StripeSubscriptionStatus } from 'src/student/student.entity';
 import Stripe from 'stripe';
-// --- MODIFICACIÓN: Añadidas las importaciones para la nueva funcionalidad ---
 import {
   CreateStripeSubscriptionDto,
   FinancialMetricsDto,
@@ -54,7 +53,7 @@ export class StripeService {
     });
   }
 
-  // --- NUEVO MÉTODO AÑADIDO ---
+  // --- MÉTODO DE MÉTRICAS CORREGIDO ---
   async getFinancialMetrics(): Promise<FinancialMetricsDto> {
     const thirtyDaysAgo = Math.floor(
       (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
@@ -63,23 +62,34 @@ export class StripeService {
     let activeSubscribers = 0;
     const planMixCounter: { [key: string]: number } = {};
 
+    // =================================================================
+    // PASO 1: Obtener todos los productos para crear un mapa de ID -> Nombre
+    // Esto evita la necesidad de expandir el producto en cada suscripción.
+    // =================================================================
+    const productList = await this.stripe.products.list({
+      active: true,
+      limit: 100,
+    });
+    const productMap = new Map<string, string>();
+    for (const product of productList.data) {
+      productMap.set(product.id, product.name);
+    }
+
     // Procesa suscripciones activas y en período de prueba
     const processSubscriptions = async (status: Stripe.Subscription.Status) => {
+      // =================================================================
+      // PASO 2: Eliminar el 'expand' que causaba el error de 5 niveles.
+      // Ya no necesitamos expandir 'product' porque tenemos el mapa.
+      // =================================================================
       for await (const sub of this.stripe.subscriptions.list({
         status: status,
         limit: 100,
-        expand: ['data.items.data.price.product'],
       })) {
-        // Adaptado al estilo de tu código de producción
         const subscription = sub as any;
         activeSubscribers++;
         const priceObject = subscription.items.data[0]?.price;
 
-        if (
-          priceObject &&
-          status === 'active' &&
-          priceObject.unit_amount !== null
-        ) {
+        if (status === 'active' && priceObject?.unit_amount !== null) {
           const price = priceObject.unit_amount / 100;
           let monthlyValue = 0;
           if (priceObject.recurring) {
@@ -98,9 +108,12 @@ export class StripeService {
           mrr += monthlyValue;
         }
 
-        const product = priceObject?.product;
+        // =================================================================
+        // PASO 3: Buscar el nombre del producto en nuestro mapa local.
+        // =================================================================
+        const productId = priceObject?.product as string; // Esto es el ID del producto
         const productName =
-          product?.name || priceObject?.nickname || 'Unknown Plan';
+          productMap.get(productId) || priceObject?.nickname || 'Unknown Plan';
         planMixCounter[productName] = (planMixCounter[productName] || 0) + 1;
       }
     };
@@ -108,7 +121,7 @@ export class StripeService {
     await processSubscriptions('active');
     await processSubscriptions('trialing');
 
-    // Calcula la tasa de churn
+    // El resto de la lógica no cambia...
     let canceledInLast30Days = 0;
     for await (const event of this.stripe.events.list({
       type: 'customer.subscription.deleted',
@@ -124,11 +137,9 @@ export class StripeService {
           100
         : 0;
 
-    // Calcula ARPU y LTV
     const arpu = activeSubscribers > 0 ? mrr / activeSubscribers : 0;
     const ltv = churnRate > 0 ? arpu / (churnRate / 100) : 0;
 
-    // Calcula la tasa de fallos de pago
     let succeededInvoices = 0;
     let failedInvoices = 0;
     const nowTimestamp = Math.floor(Date.now() / 1000);
@@ -137,7 +148,6 @@ export class StripeService {
       created: { gte: thirtyDaysAgo },
       limit: 100,
     })) {
-      // Adaptado al estilo de tu código
       const inv = invoice as any;
       if (
         inv.billing_reason !== 'subscription_cycle' &&
@@ -160,10 +170,7 @@ export class StripeService {
       totalRenewals > 0 ? (failedInvoices / totalRenewals) * 100 : 0;
 
     const planMix: PlanMixItemDto[] = Object.entries(planMixCounter).map(
-      ([name, count]) => ({
-        name,
-        value: count,
-      }),
+      ([name, count]) => ({ name, value: count }),
     );
 
     return {
@@ -178,6 +185,7 @@ export class StripeService {
   }
 
   // --- CÓDIGO DE PRODUCCIÓN EXISTENTE (SIN MODIFICACIONES) ---
+  // ... (El resto del archivo no se modifica)
 
   async createStripeProduct(
     name: string,
