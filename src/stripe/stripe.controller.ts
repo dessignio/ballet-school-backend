@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Controller,
   Post,
@@ -21,7 +23,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
-import { CreateStripeSubscriptionDto } from './dto';
+import { CreateStripeSubscriptionDto, FinancialMetricsDto } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import Stripe from 'stripe';
 import {
@@ -43,6 +45,11 @@ interface RequestWithRawBody extends ExpressRequest {
 )
 export class StripeController {
   constructor(private readonly stripeService: StripeService) {}
+
+  @Get('metrics')
+  getFinancialMetrics(): Promise<FinancialMetricsDto> {
+    return this.stripeService.getFinancialMetrics();
+  }
 
   @Post('subscriptions')
   createSubscription(

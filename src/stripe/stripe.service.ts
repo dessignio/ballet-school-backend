@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -11,32 +12,37 @@ import {
   NotFoundException,
   BadRequestException,
   InternalServerErrorException,
-  Logger, // Added Logger
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Student, StripeSubscriptionStatus } from 'src/student/student.entity';
 import Stripe from 'stripe';
-import { CreateStripeSubscriptionDto } from './dto';
+// --- MODIFICACIÓN: Añadidas las importaciones para la nueva funcionalidad ---
+import {
+  CreateStripeSubscriptionDto,
+  FinancialMetricsDto,
+  PlanMixItemDto,
+} from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
-import { Payment, PaymentMethod } from 'src/payment/payment.entity'; // Import Payment entity
-import { Invoice } from 'src/invoice/invoice.entity'; // Import Invoice entity
-import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types'; // Corrected import for InvoiceItem and InvoiceStatus
+import { Payment, PaymentMethod } from 'src/payment/payment.entity';
+import { Invoice } from 'src/invoice/invoice.entity';
+import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 
 @Injectable()
 export class StripeService {
   private readonly stripe: Stripe;
-  private readonly logger = new Logger(StripeService.name); // Initialize logger
+  private readonly logger = new Logger(StripeService.name);
 
   constructor(
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
     @InjectRepository(MembershipPlanDefinitionEntity)
     private membershipPlanRepository: Repository<MembershipPlanDefinitionEntity>,
-    @InjectRepository(Payment) // Inject PaymentRepository
+    @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
-    @InjectRepository(Invoice) // Inject InvoiceRepository
+    @InjectRepository(Invoice)
     private invoiceRepository: Repository<Invoice>,
   ) {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -44,11 +50,134 @@ export class StripeService {
     }
     this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
       // @ts-ignore
-      apiVersion: '2024-06-20', // Use a stable, recent API version
+      apiVersion: '2024-06-20',
     });
   }
 
-  // --- MÉTODOS PÚBLICOS PARA PRODUCTOS Y PRECIOS ---
+  // --- NUEVO MÉTODO AÑADIDO ---
+  async getFinancialMetrics(): Promise<FinancialMetricsDto> {
+    const thirtyDaysAgo = Math.floor(
+      (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
+    );
+    let mrr = 0;
+    let activeSubscribers = 0;
+    const planMixCounter: { [key: string]: number } = {};
+
+    // Procesa suscripciones activas y en período de prueba
+    const processSubscriptions = async (status: Stripe.Subscription.Status) => {
+      for await (const sub of this.stripe.subscriptions.list({
+        status: status,
+        limit: 100,
+        expand: ['data.items.data.price.product'],
+      })) {
+        // Adaptado al estilo de tu código de producción
+        const subscription = sub as any;
+        activeSubscribers++;
+        const priceObject = subscription.items.data[0]?.price;
+
+        if (
+          priceObject &&
+          status === 'active' &&
+          priceObject.unit_amount !== null
+        ) {
+          const price = priceObject.unit_amount / 100;
+          let monthlyValue = 0;
+          if (priceObject.recurring) {
+            switch (priceObject.recurring.interval) {
+              case 'month':
+                monthlyValue = price;
+                break;
+              case 'year':
+                monthlyValue = price / 12;
+                break;
+              case 'week':
+                monthlyValue = price * 4.33;
+                break;
+            }
+          }
+          mrr += monthlyValue;
+        }
+
+        const product = priceObject?.product;
+        const productName =
+          product?.name || priceObject?.nickname || 'Unknown Plan';
+        planMixCounter[productName] = (planMixCounter[productName] || 0) + 1;
+      }
+    };
+
+    await processSubscriptions('active');
+    await processSubscriptions('trialing');
+
+    // Calcula la tasa de churn
+    let canceledInLast30Days = 0;
+    for await (const event of this.stripe.events.list({
+      type: 'customer.subscription.deleted',
+      created: { gte: thirtyDaysAgo },
+      limit: 100,
+    })) {
+      canceledInLast30Days++;
+    }
+
+    const churnRate =
+      activeSubscribers + canceledInLast30Days > 0
+        ? (canceledInLast30Days / (activeSubscribers + canceledInLast30Days)) *
+          100
+        : 0;
+
+    // Calcula ARPU y LTV
+    const arpu = activeSubscribers > 0 ? mrr / activeSubscribers : 0;
+    const ltv = churnRate > 0 ? arpu / (churnRate / 100) : 0;
+
+    // Calcula la tasa de fallos de pago
+    let succeededInvoices = 0;
+    let failedInvoices = 0;
+    const nowTimestamp = Math.floor(Date.now() / 1000);
+
+    for await (const invoice of this.stripe.invoices.list({
+      created: { gte: thirtyDaysAgo },
+      limit: 100,
+    })) {
+      // Adaptado al estilo de tu código
+      const inv = invoice as any;
+      if (
+        inv.billing_reason !== 'subscription_cycle' &&
+        inv.billing_reason !== 'subscription_create'
+      ) {
+        continue;
+      }
+      if (inv.status === 'paid') {
+        succeededInvoices++;
+      } else if (
+        inv.status === 'open' &&
+        inv.due_date &&
+        inv.due_date < nowTimestamp
+      ) {
+        failedInvoices++;
+      }
+    }
+    const totalRenewals = succeededInvoices + failedInvoices;
+    const paymentFailureRate =
+      totalRenewals > 0 ? (failedInvoices / totalRenewals) * 100 : 0;
+
+    const planMix: PlanMixItemDto[] = Object.entries(planMixCounter).map(
+      ([name, count]) => ({
+        name,
+        value: count,
+      }),
+    );
+
+    return {
+      mrr: parseFloat(mrr.toFixed(2)),
+      activeSubscribers,
+      arpu: parseFloat(arpu.toFixed(2)),
+      churnRate: parseFloat(churnRate.toFixed(1)),
+      ltv: parseFloat(ltv.toFixed(2)),
+      planMix,
+      paymentFailureRate: parseFloat(paymentFailureRate.toFixed(1)),
+    };
+  }
+
+  // --- CÓDIGO DE PRODUCCIÓN EXISTENTE (SIN MODIFICACIONES) ---
 
   async createStripeProduct(
     name: string,
@@ -96,8 +225,6 @@ export class StripeService {
       );
     }
   }
-
-  // --- MÉTODOS PARA GESTIONAR CLIENTES Y SUSCRIPCIONES ---
 
   async findOrCreateCustomer(
     studentId: string,
@@ -174,7 +301,6 @@ export class StripeService {
     const student = await this.studentRepository.findOneBy({ id: studentId });
 
     if (!student) {
-      // This should ideally not happen if findOrCreateCustomer worked.
       throw new InternalServerErrorException(
         `Could not find student ${studentId} after customer creation.`,
       );
@@ -366,7 +492,6 @@ export class StripeService {
   async getPaymentsForStudent(studentId: string): Promise<Payment[]> {
     const student = await this.studentRepository.findOneBy({ id: studentId });
     if (!student || !student.stripeCustomerId) {
-      // Return local DB results if no Stripe customer ID is present (for manual payments)
       return this.paymentRepository.find({
         where: { studentId },
         order: { paymentDate: 'DESC' },
@@ -379,16 +504,15 @@ export class StripeService {
       );
       const paymentIntents = await this.stripe.paymentIntents.list({
         customer: student.stripeCustomerId,
-        limit: 100, // You might want to handle pagination for more than 100 payments
+        limit: 100,
       });
 
-      // Map Stripe PaymentIntents to our local Payment structure
       const stripePayments: Payment[] = paymentIntents.data.map((pi) => {
         return {
           id: pi.id,
           studentId: student.id,
           studentName: `${student.firstName} ${student.lastName}`,
-          membershipPlanId: null, // This is hard to determine from a PaymentIntent alone
+          membershipPlanId: null,
           membershipPlanName: pi.description || 'Stripe Payment',
           amountPaid: pi.amount_received / 100,
           paymentDate: new Date(pi.created * 1000).toISOString().split('T')[0],
@@ -411,7 +535,6 @@ export class StripeService {
         `Failed to fetch Stripe payments for customer ${student.stripeCustomerId}: ${(error as Error).message}`,
         (error as Error).stack,
       );
-      // Fallback to local data if Stripe API fails
       return this.paymentRepository.find({
         where: { studentId },
         order: { paymentDate: 'DESC' },
@@ -422,7 +545,6 @@ export class StripeService {
   async getInvoicesForStudent(studentId: string): Promise<Invoice[]> {
     const student = await this.studentRepository.findOneBy({ id: studentId });
     if (!student || !student.stripeCustomerId) {
-      // Return local DB results if no Stripe customer ID is present (for manual invoices)
       return this.invoiceRepository.find({
         where: { studentId },
         order: { issueDate: 'DESC' },
@@ -435,7 +557,7 @@ export class StripeService {
       );
       const stripeInvoicesData = await this.stripe.invoices.list({
         customer: student.stripeCustomerId,
-        limit: 100, // Handle pagination if needed
+        limit: 100,
       });
 
       const stripeInvoices: Invoice[] = stripeInvoicesData.data.map((inv) => {
@@ -473,7 +595,6 @@ export class StripeService {
         `Failed to fetch Stripe invoices for customer ${student.stripeCustomerId}: ${(error as Error).message}`,
         (error as Error).stack,
       );
-      // Fallback to local DB if Stripe API fails
       return this.invoiceRepository.find({
         where: { studentId },
         order: { issueDate: 'DESC' },
@@ -497,15 +618,13 @@ export class StripeService {
         (error as Error).stack,
       );
       if ((error as Stripe.errors.StripeError).code === 'resource_missing') {
-        return null; // Invoice not found in Stripe
+        return null;
       }
       throw new InternalServerErrorException(
         `Failed to retrieve invoice PDF URL: ${(error as Error).message}`,
       );
     }
   }
-
-  // --- MÉTODOS PARA WEBHOOKS ---
 
   constructEvent(
     payload: string | Buffer,
@@ -751,8 +870,6 @@ export class StripeService {
       `Webhook: Invoice payment failed for invoice ID: ${invoice.id}`,
     );
   }
-
-  // --- MÉTODOS PRIVADOS DE AYUDA ---
 
   private mapStripeSubscriptionToDetails(
     subscription: Stripe.Subscription,
