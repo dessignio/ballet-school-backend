@@ -8,6 +8,7 @@ import { AdminUserModule } from 'src/admin-user/admin-user.module';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RoleModule } from 'src/role/role.module';
 
 export const jwtConstants = {
   // In a real app, this should be in an environment variable and much more complex.
@@ -22,6 +23,7 @@ export const jwtConstants = {
       secret: jwtConstants.secret,
       signOptions: { expiresIn: '8h' }, // Token expires in 8 hours
     }),
+    RoleModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

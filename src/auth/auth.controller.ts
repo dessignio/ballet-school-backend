@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/unbound-method */
 // src/auth/auth.controller.ts
 import {
@@ -14,10 +15,15 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AdminUser } from 'src/admin-user/admin-user.entity';
 import { Public } from './decorators/public.decorator';
+import { RoleService } from 'src/role/role.service';
+import { Role } from 'src/role/role.entity';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly roleService: RoleService,
+  ) {}
 
   @Public() // Mark this route as public
   @UsePipes(new ValidationPipe())
@@ -31,14 +37,31 @@ export class AuthController {
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { validatePassword, hashPassword, ...safeUser } = user as AdminUser;
 
     const token = await this.authService.login(safeUser);
 
+    // Fetch role and permissions
+    let permissions: string[] = [];
+    if (safeUser.roleId) {
+      try {
+        const role: Role = await this.roleService.findOne(safeUser.roleId);
+        if (role && role.permissions) {
+          permissions = role.permissions;
+        }
+      } catch (e) {
+        // Role not found, user will have no permissions. Log this.
+        console.warn(
+          `Could not find role with ID ${safeUser.roleId} for user ${safeUser.username}. User will have no permissions.`,
+        );
+      }
+    }
+
     return {
       ...token,
       user: safeUser,
+      permissions: permissions || [],
     };
   }
 }
