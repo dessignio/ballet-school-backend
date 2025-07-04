@@ -1,12 +1,16 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core'; // Import APP_GUARD
 
 // Controladores y Servicios Principales
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
 // Módulos de tu Aplicación
+import { AuthModule } from './auth/auth.module'; // Added AuthModule
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard'; // Added JwtAuthGuard
 import { StudentModule } from './student/student.module';
 import { AnnouncementModule } from './announcement/announcement.module';
 import { ClassOfferingModule } from './class-offering/class-offering.module';
@@ -101,6 +105,7 @@ import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
     }),
 
     // Lista completa de todos tus módulos
+    AuthModule,
     StudentModule,
     AnnouncementModule,
     ClassOfferingModule,
@@ -122,6 +127,12 @@ import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
     NotificationModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}

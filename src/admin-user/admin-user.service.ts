@@ -93,6 +93,14 @@ export class AdminUserService {
     return this.transformToSafeUser(user);
   }
 
+  async findByUsername(username: string): Promise<AdminUser | undefined> {
+    return this.adminUserRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password') // Explicitly select the password
+      .where('user.username = :username', { username })
+      .getOne();
+  }
+
   async findOneWithPassword(id: string): Promise<AdminUser> {
     // For internal auth use
     const user = await this.adminUserRepository

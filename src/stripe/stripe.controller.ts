@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Controller,
   Post,
@@ -33,6 +33,7 @@ import {
   Request as ExpressRequest,
   Response as ExpressResponse,
 } from 'express';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 interface RequestWithRawBody extends ExpressRequest {
   rawBody?: any;
@@ -123,6 +124,7 @@ export class StripeController {
     return subscription;
   }
 
+  @Public()
   @Post('webhooks')
   @HttpCode(HttpStatus.OK)
   async handleWebhook(
