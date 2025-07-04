@@ -94,11 +94,14 @@ export class AdminUserService {
   }
 
   async findByUsername(username: string): Promise<AdminUser | undefined> {
-    return this.adminUserRepository
+    const user = await this.adminUserRepository
       .createQueryBuilder('user')
       .addSelect('user.password') // Explicitly select the password
       .where('user.username = :username', { username })
       .getOne();
+
+    // Si getOne() devuelve null, retornamos undefined para cumplir con la firma.
+    return user || undefined;
   }
 
   async findOneWithPassword(id: string): Promise<AdminUser> {
