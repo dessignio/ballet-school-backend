@@ -25,6 +25,7 @@ import { PaymentModule } from './payment/payment.module'; // Added PaymentModule
 import { InvoiceModule } from './invoice/invoice.module'; // Added InvoiceModule
 import { GeneralSettingsModule } from './general-settings/general-settings.module';
 import { CalendarSettingsModule } from './calendar-settings/calendar-settings.module';
+import { NotificationModule } from './notification/notification.module';
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -118,6 +119,7 @@ import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
     InvoiceModule, // Added InvoiceModule
     GeneralSettingsModule,
     CalendarSettingsModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

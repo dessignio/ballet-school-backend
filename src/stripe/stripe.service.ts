@@ -22,12 +22,14 @@ import {
   CreateStripeSubscriptionDto,
   FinancialMetricsDto,
   PlanMixItemDto,
+  RecordManualPaymentDto, // <--- AÑADIDO: DTO para pagos manuales
 } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { Payment, PaymentMethod } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
 import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
+import { NotificationGateway } from 'src/notification/notification.gateway'; // <--- AÑADIDO: Gateway de notificaciones
 
 @Injectable()
 export class StripeService {
@@ -43,6 +45,8 @@ export class StripeService {
     private paymentRepository: Repository<Payment>,
     @InjectRepository(Invoice)
     private invoiceRepository: Repository<Invoice>,
+    // --- AÑADIDO: Inyección de NotificationGateway ---
+    private readonly notificationGateway: NotificationGateway,
   ) {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
@@ -53,7 +57,53 @@ export class StripeService {
     });
   }
 
-  // --- MÉTODO DE MÉTRICAS CORREGIDO ---
+  // --- NUEVO MÉTODO: `recordManualPayment` ---
+  /**
+   * Registra un pago manual que no se procesa a través de Stripe (ej. efectivo, transferencia).
+   * @param dto - Contiene los detalles del pago manual.
+   * @returns La entidad del pago guardado en la base de datos.
+   */
+  async recordManualPayment(dto: RecordManualPaymentDto): Promise<Payment> {
+    const student = await this.studentRepository.findOneBy({
+      id: dto.studentId,
+    });
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const plan = await this.membershipPlanRepository.findOneBy({
+      id: dto.membershipPlanId,
+    });
+    if (!plan) {
+      throw new NotFoundException('Membership plan not found');
+    }
+
+    const payment = this.paymentRepository.create({
+      studentId: dto.studentId,
+      membershipPlanId: dto.membershipPlanId,
+      amountPaid: dto.amountPaid,
+      paymentDate: dto.paymentDate,
+      paymentMethod: dto.paymentMethod,
+      transactionId: dto.transactionId,
+      notes: dto.notes,
+      studentName: `${student.firstName} ${student.lastName}`,
+      membershipPlanName: plan.name,
+    });
+
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    // Envía una notificación a todos los administradores sobre el nuevo pago
+    this.notificationGateway.sendNotificationToAll({
+      title: 'Payment Received',
+      message: `Received $${savedPayment.amountPaid.toFixed(2)} from ${savedPayment.studentName} via ${savedPayment.paymentMethod}.`,
+      type: 'success',
+      link: `/billing`,
+    });
+
+    return savedPayment;
+  }
+
+  // --- MÉTODO DE MÉTRICAS CORREGIDO (SE MANTIENE LA VERSIÓN BASE OPTIMIZADA) ---
   async getFinancialMetrics(): Promise<FinancialMetricsDto> {
     const thirtyDaysAgo = Math.floor(
       (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
@@ -62,10 +112,6 @@ export class StripeService {
     let activeSubscribers = 0;
     const planMixCounter: { [key: string]: number } = {};
 
-    // =================================================================
-    // PASO 1: Obtener todos los productos para crear un mapa de ID -> Nombre
-    // Esto evita la necesidad de expandir el producto en cada suscripción.
-    // =================================================================
     const productList = await this.stripe.products.list({
       active: true,
       limit: 100,
@@ -75,12 +121,7 @@ export class StripeService {
       productMap.set(product.id, product.name);
     }
 
-    // Procesa suscripciones activas y en período de prueba
     const processSubscriptions = async (status: Stripe.Subscription.Status) => {
-      // =================================================================
-      // PASO 2: Eliminar el 'expand' que causaba el error de 5 niveles.
-      // Ya no necesitamos expandir 'product' porque tenemos el mapa.
-      // =================================================================
       for await (const sub of this.stripe.subscriptions.list({
         status: status,
         limit: 100,
@@ -108,10 +149,7 @@ export class StripeService {
           mrr += monthlyValue;
         }
 
-        // =================================================================
-        // PASO 3: Buscar el nombre del producto en nuestro mapa local.
-        // =================================================================
-        const productId = priceObject?.product as string; // Esto es el ID del producto
+        const productId = priceObject?.product as string;
         const productName =
           productMap.get(productId) || priceObject?.nickname || 'Unknown Plan';
         planMixCounter[productName] = (planMixCounter[productName] || 0) + 1;
@@ -121,7 +159,6 @@ export class StripeService {
     await processSubscriptions('active');
     await processSubscriptions('trialing');
 
-    // El resto de la lógica no cambia...
     let canceledInLast30Days = 0;
     for await (const event of this.stripe.events.list({
       type: 'customer.subscription.deleted',
@@ -184,9 +221,8 @@ export class StripeService {
     };
   }
 
-  // --- CÓDIGO DE PRODUCCIÓN EXISTENTE (SIN MODIFICACIONES) ---
-  // ... (El resto del archivo no se modifica)
-
+  // --- CÓDIGO DE PRODUCCIÓN EXISTENTE (SE MANTIENE LA VERSIÓN BASE) ---
+  // ... (El resto de los métodos como createStripeProduct, createStripePrice, etc., se mantienen sin cambios de la versión base)
   async createStripeProduct(
     name: string,
     description?: string,
@@ -650,6 +686,7 @@ export class StripeService {
     }
   }
 
+  // --- MÉTODO `handleSubscriptionUpdated` MEJORADO CON NOTIFICACIONES ---
   async handleSubscriptionUpdated(
     subscription: Stripe.Subscription,
   ): Promise<void> {
@@ -702,6 +739,17 @@ export class StripeService {
             );
           }
         }
+      } else if (
+        // --- AÑADIDO: Lógica de notificación para pagos vencidos ---
+        subscription.status === 'past_due' ||
+        subscription.status === 'unpaid'
+      ) {
+        this.notificationGateway.sendNotificationToAll({
+          title: 'Payment Overdue',
+          message: `Student ${student.firstName} ${student.lastName}'s subscription payment is overdue.`,
+          type: 'error',
+          link: `/billing`,
+        });
       }
       await this.studentRepository.save(student);
       this.logger.log(
@@ -714,6 +762,7 @@ export class StripeService {
     }
   }
 
+  // --- MÉTODO `handleInvoicePaymentSucceeded` MEJORADO CON NOTIFICACIONES ---
   async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
     this.logger.log(
       `Webhook: Invoice payment succeeded for invoice ID: ${invoice.id}, Customer: ${invoice.customer}`,
@@ -823,6 +872,14 @@ export class StripeService {
       this.logger.log(
         `Webhook: Saved local payment for local invoice ${savedLocalInvoice.id}`,
       );
+
+      // --- AÑADIDO: Notificación de pago exitoso ---
+      this.notificationGateway.sendNotificationToAll({
+        title: 'Stripe Payment Succeeded',
+        message: `Received $${(invoice.amount_paid / 100).toFixed(2)} from ${student.firstName} ${student.lastName}.`,
+        type: 'success',
+        link: `/billing`,
+      });
     }
 
     if (stripeSubscriptionId) {

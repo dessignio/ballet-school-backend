@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Controller,
   Post,
@@ -23,7 +22,11 @@ import {
   Res,
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
-import { CreateStripeSubscriptionDto, FinancialMetricsDto } from './dto';
+import {
+  CreateStripeSubscriptionDto,
+  FinancialMetricsDto,
+  RecordManualPaymentDto,
+} from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import Stripe from 'stripe';
 import {
@@ -56,6 +59,11 @@ export class StripeController {
     @Body() createSubDto: CreateStripeSubscriptionDto,
   ): Promise<StripeSubscriptionDetails> {
     return this.stripeService.createSubscription(createSubDto);
+  }
+
+  @Post('payments')
+  recordManualPayment(@Body() recordPaymentDto: RecordManualPaymentDto) {
+    return this.stripeService.recordManualPayment(recordPaymentDto);
   }
 
   @Get('students/:studentId/stripe-subscription')

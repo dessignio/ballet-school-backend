@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import { Student } from './student.entity';
 import { CreateStudentDto, UpdateStudentDto } from './dto';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
+import { NotificationGateway } from 'src/notification/notification.gateway';
 
 // Define un tipo seguro para el estudiante, excluyendo la contraseña y los métodos internos.
 export type SafeStudent = Omit<
@@ -25,6 +26,7 @@ export class StudentService {
     private studentRepository: Repository<Student>,
     @InjectRepository(MembershipPlanDefinitionEntity)
     private membershipPlanRepository: Repository<MembershipPlanDefinitionEntity>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   // --- MÉTODOS PRIVADOS DE AYUDA ---
@@ -138,6 +140,13 @@ export class StudentService {
     id: string,
     updateStudentDto: UpdateStudentDto,
   ): Promise<SafeStudent> {
+    const existingStudent = await this.studentRepository.findOneBy({ id });
+    if (!existingStudent) {
+      throw new NotFoundException(`Student with ID "${id}" not found.`);
+    }
+    const oldPlanId = existingStudent.membershipPlanId;
+    const oldPlanName = existingStudent.membershipPlanName;
+
     const studentToUpdate = await this.studentRepository.preload({
       id: id,
       ...updateStudentDto,
@@ -193,6 +202,26 @@ export class StudentService {
 
     try {
       const savedStudent = await this.studentRepository.save(studentToUpdate);
+
+      if (
+        savedStudent.membershipPlanId &&
+        savedStudent.membershipPlanId !== oldPlanId
+      ) {
+        this.notificationGateway.sendNotificationToAll({
+          title: 'Membership Changed',
+          message: `${savedStudent.firstName} ${savedStudent.lastName}'s membership changed to ${savedStudent.membershipPlanName || 'a new plan'}.`,
+          type: 'info',
+          link: `/billing`,
+        });
+      } else if (oldPlanId && !savedStudent.membershipPlanId) {
+        this.notificationGateway.sendNotificationToAll({
+          title: 'Membership Removed',
+          message: `${savedStudent.firstName} ${savedStudent.lastName}'s membership plan (${oldPlanName}) was removed.`,
+          type: 'info',
+          link: `/billing`,
+        });
+      }
+
       return this.transformToSafeStudent(savedStudent);
     } catch (error) {
       if ((error as { code: string }).code === '23505') {

@@ -4,17 +4,28 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Absence } from './absence.entity';
 import { CreateAbsenceDto, UpdateAbsenceDto } from './dto';
+import { NotificationGateway } from 'src/notification/notification.gateway';
 
 @Injectable()
 export class AbsenceService {
   constructor(
     @InjectRepository(Absence)
     private absenceRepository: Repository<Absence>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async create(createAbsenceDto: CreateAbsenceDto): Promise<Absence> {
     const newAbsence = this.absenceRepository.create(createAbsenceDto);
-    return this.absenceRepository.save(newAbsence);
+    const savedAbsence = await this.absenceRepository.save(newAbsence);
+
+    this.notificationGateway.sendNotificationToAll({
+      title: 'Absence Recorded',
+      message: `${savedAbsence.studentName} will be absent from ${savedAbsence.className}.`,
+      type: 'info',
+      link: `/enrollments/class/${savedAbsence.classId}`,
+    });
+
+    return savedAbsence;
   }
 
   async findAll(): Promise<Absence[]> {

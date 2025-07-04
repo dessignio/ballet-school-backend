@@ -12,12 +12,15 @@ import { Student } from 'src/student/student.entity';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { Invoice } from 'src/invoice/invoice.entity'; // For optional link
 
-export type PaymentMethod =
-  | 'Cash'
-  | 'Credit Card' // Could be for one-off Stripe payments not via subscription
-  | 'Bank Transfer'
-  | 'Stripe Subscription'
-  | 'Other';
+export const PaymentMethodValues = [
+  'Cash',
+  'Credit Card',
+  'Bank Transfer',
+  'Stripe Subscription',
+  'Other',
+] as const;
+
+export type PaymentMethod = (typeof PaymentMethodValues)[number];
 
 @Entity('payments')
 export class Payment {
@@ -26,6 +29,11 @@ export class Payment {
 
   @Column({ type: 'uuid' })
   studentId: string;
+
+  // --- LÍNEA AÑADIDA ---
+  // Guardamos el nombre del estudiante para facilitar la visualización en reportes y tablas.
+  @Column({ type: 'varchar', length: 255 })
+  studentName: string;
 
   @ManyToOne(() => Student, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'studentId' })

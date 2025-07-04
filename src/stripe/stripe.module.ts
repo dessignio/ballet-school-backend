@@ -7,6 +7,7 @@ import { Student } from 'src/student/student.entity';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { Payment } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
+import { NotificationModule } from 'src/notification/notification.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { Invoice } from 'src/invoice/invoice.entity';
       Payment,
       Invoice,
     ]),
+    NotificationModule,
   ],
   controllers: [StripeController],
   providers: [StripeService],

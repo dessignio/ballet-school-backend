@@ -13,6 +13,7 @@ import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { ClassOffering } from 'src/class-offering/class-offering.entity';
 import { Student } from 'src/student/student.entity'; // Import Student entity
+import { NotificationGateway } from 'src/notification/notification.gateway';
 
 export interface MappedEnrollment {
   id: string;
@@ -34,6 +35,7 @@ export class EnrollmentService {
     private classOfferingRepository: Repository<ClassOffering>,
     @InjectRepository(Student) // Inject StudentRepository
     private studentRepository: Repository<Student>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   private async mapEnrollmentToDto(
@@ -105,8 +107,18 @@ export class EnrollmentService {
     const savedEnrollment = await this.enrollmentRepository.save(enrollment);
 
     if (savedEnrollment.status === 'Enrolled') {
-      classOffering.enrolledCount = (classOffering.enrolledCount || 0) + 1;
+      const newEnrolledCount = (classOffering.enrolledCount || 0) + 1;
+      classOffering.enrolledCount = newEnrolledCount;
       await this.classOfferingRepository.save(classOffering);
+
+      if (newEnrolledCount === classOffering.capacity) {
+        this.notificationGateway.sendNotificationToAll({
+          title: 'Class Full',
+          message: `Class "${classOffering.name}" has reached maximum capacity.`,
+          type: 'warning',
+          link: `/enrollments/class/${classOffering.id}`,
+        });
+      }
 
       // Update student's enrolledClasses
       const student = await this.studentRepository.findOneBy({ id: studentId });

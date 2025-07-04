@@ -6,22 +6,34 @@ import { Announcement } from './announcement.entity';
 // Changed import paths:
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
+import { NotificationGateway } from 'src/notification/notification.gateway';
 
 @Injectable()
 export class AnnouncementService {
   constructor(
     @InjectRepository(Announcement)
     private announcementRepository: Repository<Announcement>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async create(
     createAnnouncementDto: CreateAnnouncementDto,
   ): Promise<Announcement> {
-    // Added explicit type annotation for newAnnouncement
     const newAnnouncement: Announcement = this.announcementRepository.create(
       createAnnouncementDto,
     );
-    return this.announcementRepository.save(newAnnouncement);
+    const savedAnnouncement =
+      await this.announcementRepository.save(newAnnouncement);
+
+    // Send notification to all connected clients
+    this.notificationGateway.sendNotificationToAll({
+      title: `New Announcement: ${savedAnnouncement.title.substring(0, 30)}...`,
+      message: `Category: ${savedAnnouncement.category}. Click to view details.`,
+      type: savedAnnouncement.isImportant ? 'warning' : 'info',
+      link: '/communications',
+    });
+
+    return savedAnnouncement;
   }
 
   async findAll(): Promise<Announcement[]> {
