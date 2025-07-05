@@ -30,6 +30,7 @@ import {
   RecordManualPaymentDto,
   ChangeStripeSubscriptionPlanDto,
   UpdatePaymentMethodDto,
+  CreateAuditionPaymentDto,
 } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import Stripe from 'stripe';
@@ -56,8 +57,10 @@ export class StripeController {
   constructor(private readonly stripeService: StripeService) {}
 
   @Post('create-audition-payment')
-  createAuditionPaymentIntent(): Promise<{ clientSecret: string }> {
-    return this.stripeService.createAuditionPaymentIntent();
+  createAuditionPaymentIntent(
+    @Body() paymentDto: CreateAuditionPaymentDto,
+  ): Promise<{ clientSecret: string }> {
+    return this.stripeService.createAuditionPaymentIntent(paymentDto);
   }
 
   @Get('metrics')

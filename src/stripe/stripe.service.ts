@@ -23,6 +23,7 @@ import {
   FinancialMetricsDto,
   PlanMixItemDto,
   RecordManualPaymentDto,
+  CreateAuditionPaymentDto, // <--- AÑADIDO: DTO para el nuevo flujo
 } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
@@ -56,8 +57,15 @@ export class StripeService {
     });
   }
 
+  // --- MÉTODO MODIFICADO ---
+  /**
+   * Crea una intención de pago para la tarifa de audición para un nuevo prospecto.
+   * Crea un nuevo cliente en Stripe con los datos proporcionados.
+   * @param paymentDto - Un objeto con el nombre y email del pagador.
+   * @returns Un objeto que contiene el clientSecret para el Payment Element de Stripe.
+   */
   async createAuditionPaymentIntent(
-    studentId?: string,
+    paymentDto: CreateAuditionPaymentDto,
   ): Promise<{ clientSecret: string }> {
     const auditionPriceId = 'price_1RhKYKRoIWWgoaNuDd6TzgUf';
     const auditionProductId = 'prod_ScZhhq6OolKX7V';
@@ -70,27 +78,21 @@ export class StripeService {
         );
       }
 
-      let customerId: string | undefined;
-      if (studentId) {
-        const student = await this.studentRepository.findOneBy({
-          id: studentId,
-        });
-        if (student?.stripeCustomerId) {
-          customerId = student.stripeCustomerId;
-        } else if (student) {
-          const customer = await this.findOrCreateCustomer(studentId);
-          customerId = customer.id;
-        }
-      }
+      // 1. Crear un nuevo Cliente en Stripe para el prospecto
+      const customer = await this.stripe.customers.create({
+        name: paymentDto.name,
+        email: paymentDto.email,
+        description: 'Audition Prospect',
+      });
 
+      // 2. Crear una Intención de Pago asociada al nuevo cliente
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount: price.unit_amount,
         currency: price.currency,
+        customer: customer.id, // Asocia el pago con el cliente recién creado
         description: 'Audition Fee Payment',
-        customer: customerId,
         metadata: {
           productId: auditionProductId,
-          ...(studentId && { studentId: studentId }),
         },
         automatic_payment_methods: {
           enabled: true,
@@ -117,10 +119,9 @@ export class StripeService {
     }
   }
 
-  // --- MÉTODO CORREGIDO Y RESTAURADO ---
   async findOrCreateCustomer(
     studentId: string,
-    paymentMethodId?: string, // Se marca como opcional con "?"
+    paymentMethodId?: string,
   ): Promise<Stripe.Customer> {
     const student = await this.studentRepository.findOneBy({ id: studentId });
     if (!student) {
@@ -219,7 +220,7 @@ export class StripeService {
     return savedPayment;
   }
 
-  // ... (El resto del código no necesita cambios y se mantiene igual)
+  // ... [El resto del archivo se mantiene exactamente igual que tu código base] ...
 
   async getFinancialMetrics(): Promise<FinancialMetricsDto> {
     const thirtyDaysAgo = Math.floor(
