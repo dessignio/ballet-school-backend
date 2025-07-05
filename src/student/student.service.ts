@@ -111,6 +111,9 @@ export class StudentService {
 
     try {
       const savedStudent = await this.studentRepository.save(newStudent);
+      this.notificationGateway.broadcastDataUpdate('students', {
+        createdId: savedStudent.id,
+      });
       return this.transformToSafeStudent(savedStudent);
     } catch (error) {
       if ((error as { code: string }).code === '23505') {
@@ -222,6 +225,10 @@ export class StudentService {
         });
       }
 
+      this.notificationGateway.broadcastDataUpdate('students', {
+        updatedId: savedStudent.id,
+      });
+
       return this.transformToSafeStudent(savedStudent);
     } catch (error) {
       if ((error as { code: string }).code === '23505') {
@@ -241,5 +248,6 @@ export class StudentService {
         `Student with ID "${id}" not found to delete.`,
       );
     }
+    this.notificationGateway.broadcastDataUpdate('students', { deletedId: id });
   }
 }

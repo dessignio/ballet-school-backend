@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   OnGatewayConnection,
@@ -80,5 +81,12 @@ export class NotificationGateway
   sendNotificationToAll(payload: ServerNotificationPayload) {
     this.server.emit('notification', payload);
     this.logger.log(`Broadcasted notification to all clients.`);
+  }
+
+  broadcastDataUpdate(entity: string, payload: any) {
+    this.logger.log(
+      `Broadcasting data update for entity: ${entity} with payload ${JSON.stringify(payload)}`,
+    );
+    this.server.emit('data:update', { entity, payload });
   }
 }

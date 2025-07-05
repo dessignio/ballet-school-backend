@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // src/enrollment/enrollment.service.ts
 import {
@@ -136,8 +137,13 @@ export class EnrollmentService {
         );
       }
     }
-    // TODO: Add logic for managing waitlistPosition if status is 'Waitlisted'
-    // and potentially updating student's waitlistedClasses array.
+
+    this.notificationGateway.broadcastDataUpdate('enrollments', {
+      classOfferingId,
+    });
+    this.notificationGateway.broadcastDataUpdate('classOfferings', {
+      updatedId: classOfferingId,
+    });
 
     return this.mapEnrollmentToDto(savedEnrollment);
   }
@@ -240,7 +246,13 @@ export class EnrollmentService {
           `Student with ID "${studentId}" not found during enrollment post-processing for remove.`,
         );
       }
-      // TODO: Future: Promote from waitlist if applicable and space opens up.
     }
+
+    this.notificationGateway.broadcastDataUpdate('enrollments', {
+      classOfferingId,
+    });
+    this.notificationGateway.broadcastDataUpdate('classOfferings', {
+      updatedId: classOfferingId,
+    });
   }
 }

@@ -23,7 +23,7 @@ import {
   FinancialMetricsDto,
   PlanMixItemDto,
   RecordManualPaymentDto,
-  CreateAuditionPaymentDto, // <--- AÑADIDO: DTO para el nuevo flujo
+  CreateAuditionPaymentDto,
 } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
@@ -31,6 +31,8 @@ import { Payment, PaymentMethod } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
 import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 import { NotificationGateway } from 'src/notification/notification.gateway';
+
+const MATRICULA_PRICE_ID = 'price_1RhKKMRoIWWgoaNupnq89OuK';
 
 @Injectable()
 export class StripeService {
@@ -57,13 +59,6 @@ export class StripeService {
     });
   }
 
-  // --- MÉTODO MODIFICADO ---
-  /**
-   * Crea una intención de pago para la tarifa de audición para un nuevo prospecto.
-   * Crea un nuevo cliente en Stripe con los datos proporcionados.
-   * @param paymentDto - Un objeto con el nombre y email del pagador.
-   * @returns Un objeto que contiene el clientSecret para el Payment Element de Stripe.
-   */
   async createAuditionPaymentIntent(
     paymentDto: CreateAuditionPaymentDto,
   ): Promise<{ clientSecret: string }> {
@@ -78,18 +73,16 @@ export class StripeService {
         );
       }
 
-      // 1. Crear un nuevo Cliente en Stripe para el prospecto
       const customer = await this.stripe.customers.create({
         name: paymentDto.name,
         email: paymentDto.email,
         description: 'Audition Prospect',
       });
 
-      // 2. Crear una Intención de Pago asociada al nuevo cliente
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount: price.unit_amount,
         currency: price.currency,
-        customer: customer.id, // Asocia el pago con el cliente recién creado
+        customer: customer.id,
         description: 'Audition Fee Payment',
         metadata: {
           productId: auditionProductId,
@@ -219,8 +212,6 @@ export class StripeService {
 
     return savedPayment;
   }
-
-  // ... [El resto del archivo se mantiene exactamente igual que tu código base] ...
 
   async getFinancialMetrics(): Promise<FinancialMetricsDto> {
     const thirtyDaysAgo = Math.floor(
@@ -405,12 +396,26 @@ export class StripeService {
     }
 
     try {
-      const subscription = await this.stripe.subscriptions.create({
+      const subscriptionParams: Stripe.SubscriptionCreateParams = {
         customer: customer.id,
         items: [{ price: priceId }],
         expand: ['latest_invoice.payment_intent'],
         payment_behavior: 'default_incomplete',
-      });
+      };
+
+      if (!student.stripeSubscriptionId) {
+        this.logger.log(
+          `Adding matricula fee for new subscriber: student ${student.id}`,
+        );
+        subscriptionParams.add_invoice_items = [
+          {
+            price: MATRICULA_PRICE_ID,
+          },
+        ];
+      }
+
+      const subscription =
+        await this.stripe.subscriptions.create(subscriptionParams);
 
       student.stripeSubscriptionId = subscription.id;
       student.stripeSubscriptionStatus =
@@ -465,6 +470,14 @@ export class StripeService {
       }
 
       await this.studentRepository.save(student);
+
+      this.notificationGateway.broadcastDataUpdate('students', {
+        updatedId: student.id,
+      });
+      this.notificationGateway.broadcastDataUpdate('subscriptions', {
+        studentId: student.id,
+      });
+
       return this.mapStripeSubscriptionToDetails(subscription);
     } catch (error) {
       this.logger.error(
@@ -503,6 +516,19 @@ export class StripeService {
       );
 
       await this.handleSubscriptionUpdated(updatedSubscription);
+
+      const student = await this.studentRepository.findOne({
+        where: { stripeSubscriptionId: updatedSubscription.id },
+      });
+      if (student) {
+        this.notificationGateway.broadcastDataUpdate('students', {
+          updatedId: student.id,
+        });
+        this.notificationGateway.broadcastDataUpdate('subscriptions', {
+          studentId: student.id,
+        });
+      }
+
       return this.mapStripeSubscriptionToDetails(updatedSubscription);
     } catch (error) {
       this.logger.error(
@@ -532,6 +558,14 @@ export class StripeService {
       await this.stripe.customers.update(student.stripeCustomerId, {
         invoice_settings: { default_payment_method: paymentMethodId },
       });
+
+      this.notificationGateway.broadcastDataUpdate('students', {
+        updatedId: student.id,
+      });
+      this.notificationGateway.broadcastDataUpdate('subscriptions', {
+        studentId: student.id,
+      });
+
       return { success: true };
     } catch (error) {
       this.logger.error(
@@ -569,6 +603,14 @@ export class StripeService {
       student.stripeSubscriptionStatus =
         canceledSubscription.status as StripeSubscriptionDetails['status'];
       await this.studentRepository.save(student);
+
+      this.notificationGateway.broadcastDataUpdate('students', {
+        updatedId: student.id,
+      });
+      this.notificationGateway.broadcastDataUpdate('subscriptions', {
+        studentId: student.id,
+      });
+
       return this.mapStripeSubscriptionToDetails(canceledSubscription);
     } catch (error) {
       this.logger.error(
@@ -895,14 +937,22 @@ export class StripeService {
       this.logger.log(
         `Audition fee payment succeeded for invoice: ${invoice.id}`,
       );
-      const studentId = (invoice as any).metadata?.studentId;
-      if (studentId) {
-        const student = await this.studentRepository.findOneBy({
-          id: studentId,
-        });
-        if (student) {
-          this.logger.log(`Marked audition as paid for student: ${studentId}`);
-        }
+      // Here you can add logic to create a "Prospect" record or similar
+      // using the customer details from the invoice.
+      const customer = await this.stripe.customers.retrieve(
+        invoice.customer as string,
+      );
+      if (customer && !customer.deleted) {
+        this.logger.log(
+          `Audition prospect created: ${customer.name} (${customer.email})`,
+        );
+        // Example: Create a prospect entity in your DB
+        // await this.prospectRepository.save({
+        //   name: customer.name,
+        //   email: customer.email,
+        //   stripeCustomerId: customer.id,
+        //   auditionPaymentStatus: 'paid',
+        // });
       }
     } else {
       const student = await this.studentRepository.findOne({
