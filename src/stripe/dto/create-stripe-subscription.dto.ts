@@ -18,3 +18,15 @@ export class CreateStripeSubscriptionDto {
   @IsString()
   existingStripeCustomerId?: string; // Optional: if student already has a Stripe Customer ID
 }
+
+export class ChangeStripeSubscriptionPlanDto {
+  @IsString()
+  @IsNotEmpty()
+  newPriceId: string;
+}
+
+export class UpdatePaymentMethodDto {
+  @IsString()
+  @IsNotEmpty()
+  paymentMethodId: string;
+}

@@ -22,14 +22,14 @@ import {
   CreateStripeSubscriptionDto,
   FinancialMetricsDto,
   PlanMixItemDto,
-  RecordManualPaymentDto, // <--- AÑADIDO: DTO para pagos manuales
+  RecordManualPaymentDto,
 } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { Payment, PaymentMethod } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
 import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
-import { NotificationGateway } from 'src/notification/notification.gateway'; // <--- AÑADIDO: Gateway de notificaciones
+import { NotificationGateway } from 'src/notification/notification.gateway';
 
 @Injectable()
 export class StripeService {
@@ -45,7 +45,6 @@ export class StripeService {
     private paymentRepository: Repository<Payment>,
     @InjectRepository(Invoice)
     private invoiceRepository: Repository<Invoice>,
-    // --- AÑADIDO: Inyección de NotificationGateway ---
     private readonly notificationGateway: NotificationGateway,
   ) {
     if (!process.env.STRIPE_SECRET_KEY) {
@@ -57,12 +56,6 @@ export class StripeService {
     });
   }
 
-  // --- NUEVO MÉTODO: `recordManualPayment` ---
-  /**
-   * Registra un pago manual que no se procesa a través de Stripe (ej. efectivo, transferencia).
-   * @param dto - Contiene los detalles del pago manual.
-   * @returns La entidad del pago guardado en la base de datos.
-   */
   async recordManualPayment(dto: RecordManualPaymentDto): Promise<Payment> {
     const student = await this.studentRepository.findOneBy({
       id: dto.studentId,
@@ -92,7 +85,6 @@ export class StripeService {
 
     const savedPayment = await this.paymentRepository.save(payment);
 
-    // Envía una notificación a todos los administradores sobre el nuevo pago
     this.notificationGateway.sendNotificationToAll({
       title: 'Payment Received',
       message: `Received $${savedPayment.amountPaid.toFixed(2)} from ${savedPayment.studentName} via ${savedPayment.paymentMethod}.`,
@@ -103,7 +95,6 @@ export class StripeService {
     return savedPayment;
   }
 
-  // --- MÉTODO DE MÉTRICAS CORREGIDO (SE MANTIENE LA VERSIÓN BASE OPTIMIZADA) ---
   async getFinancialMetrics(): Promise<FinancialMetricsDto> {
     const thirtyDaysAgo = Math.floor(
       (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
@@ -221,8 +212,6 @@ export class StripeService {
     };
   }
 
-  // --- CÓDIGO DE PRODUCCIÓN EXISTENTE (SE MANTIENE LA VERSIÓN BASE) ---
-  // ... (El resto de los métodos como createStripeProduct, createStripePrice, etc., se mantienen sin cambios de la versión base)
   async createStripeProduct(
     name: string,
     description?: string,
@@ -423,6 +412,72 @@ export class StripeService {
           : 'Unknown Stripe subscription creation error.';
       throw new BadRequestException(
         `Failed to create Stripe subscription: ${errorMessage}`,
+      );
+    }
+  }
+
+  // --- NUEVO MÉTODO ---
+  async updateSubscription(
+    subscriptionId: string,
+    newPriceId: string,
+  ): Promise<StripeSubscriptionDetails> {
+    try {
+      const subscription =
+        await this.stripe.subscriptions.retrieve(subscriptionId);
+      const updatedSubscription = await this.stripe.subscriptions.update(
+        subscriptionId,
+        {
+          cancel_at_period_end: false,
+          proration_behavior: 'create_prorations',
+          items: [
+            {
+              id: subscription.items.data[0].id,
+              price: newPriceId,
+            },
+          ],
+        },
+      );
+
+      // Reutiliza el webhook handler para actualizar la data local
+      await this.handleSubscriptionUpdated(updatedSubscription);
+      return this.mapStripeSubscriptionToDetails(updatedSubscription);
+    } catch (error) {
+      this.logger.error(
+        `Failed to update Stripe subscription ${subscriptionId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        `Could not update subscription: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  // --- NUEVO MÉTODO ---
+  async updatePaymentMethod(
+    studentId: string,
+    paymentMethodId: string,
+  ): Promise<{ success: boolean }> {
+    const student = await this.studentRepository.findOneBy({ id: studentId });
+    if (!student || !student.stripeCustomerId) {
+      throw new NotFoundException(
+        `Stripe customer not found for student ID ${studentId}.`,
+      );
+    }
+    try {
+      await this.stripe.paymentMethods.attach(paymentMethodId, {
+        customer: student.stripeCustomerId,
+      });
+      await this.stripe.customers.update(student.stripeCustomerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      });
+      return { success: true };
+    } catch (error) {
+      this.logger.error(
+        `Failed to update payment method for Stripe customer ${student.stripeCustomerId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        `Could not update payment method: ${(error as Error).message}`,
       );
     }
   }
@@ -686,7 +741,6 @@ export class StripeService {
     }
   }
 
-  // --- MÉTODO `handleSubscriptionUpdated` MEJORADO CON NOTIFICACIONES ---
   async handleSubscriptionUpdated(
     subscription: Stripe.Subscription,
   ): Promise<void> {
@@ -740,7 +794,6 @@ export class StripeService {
           }
         }
       } else if (
-        // --- AÑADIDO: Lógica de notificación para pagos vencidos ---
         subscription.status === 'past_due' ||
         subscription.status === 'unpaid'
       ) {
@@ -762,7 +815,6 @@ export class StripeService {
     }
   }
 
-  // --- MÉTODO `handleInvoicePaymentSucceeded` MEJORADO CON NOTIFICACIONES ---
   async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
     this.logger.log(
       `Webhook: Invoice payment succeeded for invoice ID: ${invoice.id}, Customer: ${invoice.customer}`,
@@ -873,7 +925,6 @@ export class StripeService {
         `Webhook: Saved local payment for local invoice ${savedLocalInvoice.id}`,
       );
 
-      // --- AÑADIDO: Notificación de pago exitoso ---
       this.notificationGateway.sendNotificationToAll({
         title: 'Stripe Payment Succeeded',
         message: `Received $${(invoice.amount_paid / 100).toFixed(2)} from ${student.firstName} ${student.lastName}.`,

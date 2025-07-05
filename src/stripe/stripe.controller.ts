@@ -20,12 +20,16 @@ import {
   InternalServerErrorException,
   NotFoundException,
   Res,
+  StreamableFile,
+  Patch,
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import {
   CreateStripeSubscriptionDto,
   FinancialMetricsDto,
   RecordManualPaymentDto,
+  ChangeStripeSubscriptionPlanDto,
+  UpdatePaymentMethodDto,
 } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import Stripe from 'stripe';
@@ -34,6 +38,7 @@ import {
   Response as ExpressResponse,
 } from 'express';
 import { Public } from 'src/auth/decorators/public.decorator';
+import * as https from 'https';
 
 interface RequestWithRawBody extends ExpressRequest {
   rawBody?: any;
@@ -62,6 +67,29 @@ export class StripeController {
     return this.stripeService.createSubscription(createSubDto);
   }
 
+  @Patch('subscriptions/:subscriptionId/change-plan')
+  changeSubscriptionPlan(
+    @Param('subscriptionId') subscriptionId: string,
+    @Body() changePlanDto: ChangeStripeSubscriptionPlanDto,
+  ): Promise<StripeSubscriptionDetails> {
+    return this.stripeService.updateSubscription(
+      subscriptionId,
+      changePlanDto.newPriceId,
+    );
+  }
+
+  @Post('students/:studentId/update-payment-method')
+  @HttpCode(HttpStatus.OK)
+  updatePaymentMethod(
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() updateDto: UpdatePaymentMethodDto,
+  ): Promise<{ success: boolean }> {
+    return this.stripeService.updatePaymentMethod(
+      studentId,
+      updateDto.paymentMethodId,
+    );
+  }
+
   @Post('payments')
   recordManualPayment(@Body() recordPaymentDto: RecordManualPaymentDto) {
     return this.stripeService.recordManualPayment(recordPaymentDto);
@@ -85,11 +113,35 @@ export class StripeController {
   @Get('invoices/:invoiceId/pdf')
   async getInvoicePdf(
     @Param('invoiceId') invoiceId: string,
-    @Res() res: ExpressResponse,
-  ): Promise<void> {
+    @Res({ passthrough: true }) res: ExpressResponse,
+  ): Promise<StreamableFile> {
     const pdfUrl = await this.stripeService.getInvoicePdfUrl(invoiceId);
     if (pdfUrl) {
-      res.redirect(303, pdfUrl);
+      return new Promise((resolve, reject) => {
+        https
+          .get(pdfUrl, (pdfStream) => {
+            if (pdfStream.statusCode !== 200) {
+              reject(
+                new InternalServerErrorException(
+                  'Failed to fetch PDF from Stripe.',
+                ),
+              );
+              return;
+            }
+            res.set({
+              'Content-Type': 'application/pdf',
+              'Content-Disposition': `attachment; filename="invoice-${invoiceId}.pdf"`,
+            });
+            resolve(new StreamableFile(pdfStream));
+          })
+          .on('error', (e) => {
+            reject(
+              new InternalServerErrorException(
+                `Could not fetch PDF from Stripe: ${e.message}`,
+              ),
+            );
+          });
+      });
     } else {
       throw new NotFoundException(
         `Invoice PDF not found for ID "${invoiceId}" or invoice does not exist.`,
