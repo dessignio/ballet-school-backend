@@ -30,6 +30,7 @@ import { InvoiceModule } from './invoice/invoice.module'; // Added InvoiceModule
 import { GeneralSettingsModule } from './general-settings/general-settings.module';
 import { CalendarSettingsModule } from './calendar-settings/calendar-settings.module';
 import { NotificationModule } from './notification/notification.module';
+import { ProspectModule } from './prospect/prospect.module'; // Added ProspectModule
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -49,6 +50,7 @@ import { Payment } from './payment/payment.entity'; // Added Payment Entity
 import { Invoice } from './invoice/invoice.entity'; // Added Invoice Entity
 import { GeneralSettings } from './general-settings/general-settings.entity';
 import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
+import { Prospect } from './prospect/prospect.entity'; // Added Prospect Entity
 
 @Module({
   imports: [
@@ -89,6 +91,7 @@ import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
           Invoice, // Added Invoice Entity
           GeneralSettings,
           CalendarSettings,
+          Prospect, // Added Prospect Entity
         ],
 
         // Sincroniza la base de datos.
@@ -125,6 +128,7 @@ import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
     GeneralSettingsModule,
     CalendarSettingsModule,
     NotificationModule,
+    ProspectModule, // Added ProspectModule
   ],
   controllers: [AppController],
   providers: [

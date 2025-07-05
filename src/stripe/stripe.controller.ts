@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   Controller,
   Post,
@@ -54,6 +54,11 @@ interface RequestWithRawBody extends ExpressRequest {
 )
 export class StripeController {
   constructor(private readonly stripeService: StripeService) {}
+
+  @Post('create-audition-payment')
+  createAuditionPaymentIntent(): Promise<{ clientSecret: string }> {
+    return this.stripeService.createAuditionPaymentIntent();
+  }
 
   @Get('metrics')
   getFinancialMetrics(): Promise<FinancialMetricsDto> {

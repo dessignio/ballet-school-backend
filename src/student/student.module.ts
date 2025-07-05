@@ -13,5 +13,6 @@ import { NotificationModule } from 'src/notification/notification.module';
   ], // Added MembershipPlanDefinitionEntity
   providers: [StudentService],
   controllers: [StudentController],
+  exports: [StudentService],
 })
 export class StudentModule {}
