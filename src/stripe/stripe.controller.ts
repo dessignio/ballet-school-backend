@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Controller,
   Post,
@@ -116,11 +116,43 @@ export class StripeController {
     @Res({ passthrough: true }) res: ExpressResponse,
   ): Promise<StreamableFile> {
     const pdfUrl = await this.stripeService.getInvoicePdfUrl(invoiceId);
-    if (pdfUrl) {
-      return new Promise((resolve, reject) => {
+
+    if (!pdfUrl) {
+      throw new NotFoundException(
+        `Invoice PDF not found for ID "${invoiceId}" or invoice does not exist.`,
+      );
+    }
+
+    const MAX_REDIRECTS = 5;
+
+    return new Promise((resolve, reject) => {
+      const makeRequest = (url: string, redirectCount = 0) => {
+        if (redirectCount > MAX_REDIRECTS) {
+          reject(
+            new InternalServerErrorException(
+              'Too many redirects while fetching PDF.',
+            ),
+          );
+          return;
+        }
+
         https
-          .get(pdfUrl, (pdfStream) => {
-            if (pdfStream.statusCode !== 200) {
+          .get(url, (pdfStream) => {
+            const statusCode = pdfStream.statusCode;
+
+            if (
+              statusCode &&
+              statusCode >= 300 &&
+              statusCode < 400 &&
+              pdfStream.headers.location
+            ) {
+              // Handle redirect by consuming the current response and making a new request
+              pdfStream.resume();
+              makeRequest(pdfStream.headers.location, redirectCount + 1);
+              return;
+            }
+
+            if (statusCode !== 200) {
               reject(
                 new InternalServerErrorException(
                   'Failed to fetch PDF from Stripe.',
@@ -128,6 +160,7 @@ export class StripeController {
               );
               return;
             }
+
             res.set({
               'Content-Type': 'application/pdf',
               'Content-Disposition': `attachment; filename="invoice-${invoiceId}.pdf"`,
@@ -141,12 +174,10 @@ export class StripeController {
               ),
             );
           });
-      });
-    } else {
-      throw new NotFoundException(
-        `Invoice PDF not found for ID "${invoiceId}" or invoice does not exist.`,
-      );
-    }
+      };
+
+      makeRequest(pdfUrl); // Initial call
+    });
   }
 
   @Get('payments')
