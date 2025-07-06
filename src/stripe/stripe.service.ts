@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -829,10 +830,7 @@ export class StripeService {
     }
   }
 
-  constructEvent(
-    payload: string | Buffer,
-    sig: string | string[],
-  ): Stripe.Event {
+  constructEvent(payload: string | any, sig: string | string[]): Stripe.Event {
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!secret) {
       throw new InternalServerErrorException('Webhook secret not configured.');
@@ -912,6 +910,13 @@ export class StripeService {
       this.logger.log(
         `Webhook: Updated subscription for student ${student.id} to ${subscription.status}`,
       );
+      // Notify frontend of the change
+      this.notificationGateway.broadcastDataUpdate('students', {
+        updatedId: student.id,
+      });
+      this.notificationGateway.broadcastDataUpdate('subscriptions', {
+        studentId: student.id,
+      });
     } else {
       this.logger.warn(
         `Webhook: Received subscription update for unknown customer ${subscription.customer}`,
@@ -1101,6 +1106,13 @@ export class StripeService {
           this.logger.log(
             `Webhook: Updated student ${student.id} membership dates from subscription ${stripeSubscriptionId}.`,
           );
+          // Notify frontend of the change
+          this.notificationGateway.broadcastDataUpdate('students', {
+            updatedId: student.id,
+          });
+          this.notificationGateway.broadcastDataUpdate('subscriptions', {
+            studentId: student.id,
+          });
         } catch (subError) {
           this.logger.error(
             `Webhook: Error retrieving Stripe subscription ${stripeSubscriptionId} for student update: ${(subError as Error).message}`,
