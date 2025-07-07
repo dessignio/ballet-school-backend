@@ -92,6 +92,10 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   )
   membershipStartDate?: string | null;
 
+  @IsOptional()
+  @IsUUID('4', { message: 'Parent ID must be a valid UUID.' })
+  parentId?: string | null;
+
   // El resto de tus propiedades heredadas funcionan como antes.
   // No necesitas redeclararlas a menos que quieras cambiar las reglas de validación.
 }

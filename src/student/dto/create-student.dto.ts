@@ -171,4 +171,8 @@ export class CreateStudentDto {
   @IsOptional()
   @IsString()
   personalGoals?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'Parent ID must be a valid UUID.' })
+  parentId?: string | null;
 }

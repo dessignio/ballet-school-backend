@@ -12,6 +12,7 @@ import { Student } from './student.entity';
 import { CreateStudentDto, UpdateStudentDto } from './dto';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { NotificationGateway } from 'src/notification/notification.gateway';
+import { Parent } from 'src/parent/parent.entity';
 
 // Define un tipo seguro para el estudiante, excluyendo la contraseña y los métodos internos.
 export type SafeStudent = Omit<
@@ -26,6 +27,8 @@ export class StudentService {
     private studentRepository: Repository<Student>,
     @InjectRepository(MembershipPlanDefinitionEntity)
     private membershipPlanRepository: Repository<MembershipPlanDefinitionEntity>,
+    @InjectRepository(Parent)
+    private parentRepository: Repository<Parent>,
     private readonly notificationGateway: NotificationGateway,
   ) {}
 
@@ -65,7 +68,7 @@ export class StudentService {
   // --- MÉTODOS CRUD ---
 
   async create(createStudentDto: CreateStudentDto): Promise<SafeStudent> {
-    const { email, username, membershipPlanId, membershipStartDate } =
+    const { email, username, membershipPlanId, membershipStartDate, parentId } =
       createStudentDto;
 
     // Verificación de conflictos
@@ -87,6 +90,16 @@ export class StudentService {
     }
 
     const newStudent = this.studentRepository.create(createStudentDto);
+
+    if (parentId) {
+      const parent = await this.parentRepository.findOneBy({ id: parentId });
+      if (!parent) {
+        throw new BadRequestException(
+          `Parent with ID "${parentId}" not found.`,
+        );
+      }
+      newStudent.parentName = `${parent.firstName} ${parent.lastName}`;
+    }
 
     if (membershipPlanId) {
       const plan = await this.membershipPlanRepository.findOneBy({
@@ -127,12 +140,16 @@ export class StudentService {
   async findAll(): Promise<SafeStudent[]> {
     const students = await this.studentRepository.find({
       order: { lastName: 'ASC', firstName: 'ASC' },
+      relations: ['parent'],
     });
     return this.transformToSafeStudents(students);
   }
 
   async findOne(id: string): Promise<SafeStudent> {
-    const student = await this.studentRepository.findOneBy({ id });
+    const student = await this.studentRepository.findOne({
+      where: { id },
+      relations: ['parent'],
+    });
     if (!student) {
       throw new NotFoundException(`Student with ID "${id}" not found.`);
     }
@@ -159,7 +176,22 @@ export class StudentService {
       throw new NotFoundException(`Student with ID "${id}" not found.`);
     }
 
-    const { membershipPlanId, membershipStartDate } = updateStudentDto;
+    const { membershipPlanId, membershipStartDate, parentId } =
+      updateStudentDto;
+
+    if (parentId !== undefined) {
+      if (parentId === null) {
+        studentToUpdate.parentName = undefined;
+      } else {
+        const parent = await this.parentRepository.findOneBy({ id: parentId });
+        if (!parent) {
+          throw new BadRequestException(
+            `Parent with ID "${parentId}" not found.`,
+          );
+        }
+        studentToUpdate.parentName = `${parent.firstName} ${parent.lastName}`;
+      }
+    }
 
     if (membershipPlanId !== undefined) {
       if (membershipPlanId === null) {

@@ -13,11 +13,12 @@ import {
   UpdateDateColumn,
   BeforeInsert,
   BeforeUpdate,
-  ManyToOne, // Added for potential relation to MembershipPlanDefinitionEntity
-  JoinColumn, // Added for potential relation
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity'; // Added import
+import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
+import { Parent } from 'src/parent/parent.entity';
 
 // Definimos tipos que podrían ser ENUMs en la base de datos o simplemente strings validados.
 export type Gender = 'Masculino' | 'Femenino' | 'Otro' | 'Prefiero no decirlo';
@@ -161,6 +162,20 @@ export class Student {
     name: 'stripe_subscription_status',
   })
   stripeSubscriptionStatus?: StripeSubscriptionStatus;
+
+  @Column({ type: 'uuid', nullable: true })
+  parentId: string | null;
+
+  // parentName is for denormalized data for easier frontend display
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  parentName?: string;
+
+  @ManyToOne(() => Parent, (parent) => parent.students, {
+    nullable: true,
+    onDelete: 'SET NULL', // If parent is deleted, set parentId to null in student
+  })
+  @JoinColumn({ name: 'parentId' })
+  parent: Parent;
 
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt: Date;
