@@ -27,6 +27,14 @@ export class ParentService {
     return safeParent;
   }
 
+  async findByUsername(username: string): Promise<Parent | null> {
+    return this.parentRepository
+      .createQueryBuilder('parent')
+      .addSelect('parent.password')
+      .where('parent.username = :username', { username })
+      .getOne();
+  }
+
   async create(createParentDto: CreateParentDto): Promise<SafeParent> {
     const { email, username } = createParentDto;
     const existingByEmail = await this.parentRepository.findOne({

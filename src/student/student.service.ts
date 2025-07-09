@@ -65,6 +65,14 @@ export class StudentService {
     return renewalDate.toISOString().split('T')[0];
   }
 
+  async findByUsername(username: string): Promise<Student | null> {
+    return this.studentRepository
+      .createQueryBuilder('student')
+      .addSelect('student.password')
+      .where('student.username = :username', { username })
+      .getOne();
+  }
+
   // --- MÉTODOS CRUD ---
 
   async create(createStudentDto: CreateStudentDto): Promise<SafeStudent> {

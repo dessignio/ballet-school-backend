@@ -32,6 +32,8 @@ import { CalendarSettingsModule } from './calendar-settings/calendar-settings.mo
 import { NotificationModule } from './notification/notification.module';
 import { ProspectModule } from './prospect/prospect.module'; // Added ProspectModule
 import { ParentModule } from './parent/parent.module';
+import { PortalAuthModule } from './portal-auth/portal-auth.module';
+import { PortalModule } from './portal/portal.module';
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -133,6 +135,8 @@ import { Parent } from './parent/parent.entity';
     NotificationModule,
     ProspectModule,
     ParentModule,
+    PortalAuthModule,
+    PortalModule,
   ],
   controllers: [AppController],
   providers: [
