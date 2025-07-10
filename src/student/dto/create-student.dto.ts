@@ -96,8 +96,7 @@ export class CreateStudentDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(2048) // Max length for URLs
-  profilePictureUrl?: string;
+  profilePictureUrl?: string; // Removed MaxLength to allow for base64 strings
 
   @IsEmail({}, { message: 'A valid email is required.' })
   @MaxLength(255)
