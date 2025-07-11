@@ -13,6 +13,8 @@ import { CreateStudentDto, UpdateStudentDto } from './dto';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { NotificationGateway } from 'src/notification/notification.gateway';
 import { Parent } from 'src/parent/parent.entity';
+import { Enrollment } from 'src/enrollment/enrollment.entity';
+import { ClassOffering } from 'src/class-offering/class-offering.entity';
 
 // Define un tipo seguro para el estudiante, excluyendo la contraseña y los métodos internos.
 export type SafeStudent = Omit<
@@ -30,6 +32,10 @@ export class StudentService {
     @InjectRepository(Parent)
     private parentRepository: Repository<Parent>,
     private readonly notificationGateway: NotificationGateway,
+    @InjectRepository(Enrollment)
+    private enrollmentRepository: Repository<Enrollment>,
+    @InjectRepository(ClassOffering)
+    private classOfferingRepository: Repository<ClassOffering>,
   ) {}
 
   // --- MÉTODOS PRIVADOS DE AYUDA ---
@@ -281,12 +287,41 @@ export class StudentService {
   }
 
   async remove(id: string): Promise<void> {
+    // First, find all enrollments for this student to know which classes to update.
+    const enrollments = await this.enrollmentRepository.find({
+      where: { studentId: id, status: 'Enrolled' },
+    });
+
+    // If there are enrollments, decrement the count for each class offering.
+    if (enrollments.length > 0) {
+      const classIdsToUpdate = enrollments.map((e) => e.classOfferingId);
+      for (const classId of classIdsToUpdate) {
+        await this.classOfferingRepository.decrement(
+          { id: classId },
+          'enrolledCount',
+          1,
+        );
+      }
+    }
+
+    // Now, delete the student. The CASCADE constraint on the Enrollment entity
+    // will automatically delete all of this student's enrollment records from the database.
     const result = await this.studentRepository.delete(id);
+
+    // If no rows were affected, the student was not found.
     if (result.affected === 0) {
       throw new NotFoundException(
         `Student with ID "${id}" not found to delete.`,
       );
     }
+
+    // Notify frontend clients about the data change.
     this.notificationGateway.broadcastDataUpdate('students', { deletedId: id });
+    if (enrollments.length > 0) {
+      this.notificationGateway.broadcastDataUpdate('classOfferings', {
+        type: 'bulk_update',
+        ids: enrollments.map((e) => e.classOfferingId),
+      });
+    }
   }
 }
