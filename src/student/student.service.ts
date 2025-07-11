@@ -48,20 +48,19 @@ export class StudentService {
     startDateString: string,
     durationMonths?: number | null,
   ): string | null {
-    const startDate = new Date(startDateString);
+    // Explicitly parse the date string as UTC to avoid timezone pitfalls.
+    // '2024-07-15' becomes '2024-07-15T00:00:00.000Z'.
+    const startDate = new Date(`${startDateString}T00:00:00Z`);
     if (isNaN(startDate.getTime())) return null;
 
-    // Se usa getUTCDate para evitar problemas con zonas horarias
-    const renewalDate = new Date(
-      Date.UTC(
-        startDate.getUTCFullYear(),
-        startDate.getUTCMonth(),
-        startDate.getUTCDate(),
-      ),
-    );
+    // Clone the date to avoid modifying the original
+    const renewalDate = new Date(startDate.getTime());
 
     const duration = durationMonths && durationMonths > 0 ? durationMonths : 1;
+    // Perform date arithmetic in UTC
     renewalDate.setUTCMonth(renewalDate.getUTCMonth() + duration);
+
+    // Return the date part of the ISO string (YYYY-MM-DD)
     return renewalDate.toISOString().split('T')[0];
   }
 

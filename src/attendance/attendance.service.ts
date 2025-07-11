@@ -1,11 +1,12 @@
 // src/attendance/attendance.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { AttendanceRecord } from './attendance.entity';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { Student } from 'src/student/student.entity';
 import { ClassOffering } from 'src/class-offering/class-offering.entity';
+import { NotificationGateway } from 'src/notification/notification.gateway';
 
 @Injectable()
 export class AttendanceService {
@@ -16,17 +17,26 @@ export class AttendanceService {
     private studentRepository: Repository<Student>,
     @InjectRepository(ClassOffering)
     private classOfferingRepository: Repository<ClassOffering>,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   async findByClassAndDate(
     classOfferingId: string,
     date: string,
   ): Promise<AttendanceRecord[]> {
-    // Find records where classDateTime starts with the given date "YYYY-MM-DD"
+    // Construct a date range for the entire day in UTC.
+    // The frontend sends a local date string (e.g., '2024-07-10'), which `new Date()` parses as UTC midnight.
+    const startOfDay = new Date(date);
+    const endOfDay = new Date(date);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
     return this.attendanceRepository.find({
       where: {
         classOfferingId,
-        classDateTime: Like(`${date}%`), // Matches "YYYY-MM-DD HH:mm"
+        classDateTime: Between(
+          startOfDay.toISOString(),
+          endOfDay.toISOString(),
+        ),
       },
       relations: ['student'], // Optionally load student details
     });
@@ -68,7 +78,17 @@ export class AttendanceService {
       // Create new record
       record = this.attendanceRepository.create(dto);
     }
-    return this.attendanceRepository.save(record);
+    const savedRecord = await this.attendanceRepository.save(record);
+
+    // Send notification to admin
+    this.notificationGateway.sendNotificationToAll({
+      title: 'Attendance Update',
+      message: `${student.firstName} ${student.lastName} was marked as ${savedRecord.status} for ${classOffering.name}.`,
+      type: 'info',
+      link: `/enrollments/class/${dto.classOfferingId}`,
+    });
+
+    return savedRecord;
   }
 
   async bulkUpsertAttendance(

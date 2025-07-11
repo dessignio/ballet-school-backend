@@ -33,13 +33,8 @@ export class AttendanceController {
     @Query('classOfferingId', ParseUUIDPipe) classOfferingId: string,
     @Query('date') date: string, // Expects YYYY-MM-DD format
   ): Promise<AttendanceRecord[]> {
-    // Basic date format validation
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      // Corrected regex
-      // Using NestJS's BadRequestException for better error handling
-      throw new BadRequestException(
-        'Invalid or missing date parameter. Expected YYYY-MM-DD.',
-      );
+    if (!date) {
+      throw new BadRequestException('Date parameter is required.');
     }
     return this.attendanceService.findByClassAndDate(classOfferingId, date);
   }

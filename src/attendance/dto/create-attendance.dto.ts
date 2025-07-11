@@ -4,8 +4,8 @@ import {
   IsEnum,
   IsString,
   IsOptional,
-  Matches,
   IsNotEmpty,
+  IsISO8601,
 } from 'class-validator';
 import {
   AttendanceStatus,
@@ -21,12 +21,8 @@ export class CreateAttendanceDto {
   @IsNotEmpty()
   classOfferingId: string;
 
-  @IsString()
+  @IsISO8601()
   @IsNotEmpty()
-  @Matches(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/, {
-    // Changed \\d to \d
-    message: 'classDateTime must be in YYYY-MM-DD HH:mm format',
-  })
   classDateTime: string;
 
   @IsEnum(AttendanceStatusValues)

@@ -25,7 +25,7 @@ export class Absence {
   @Column({ type: 'varchar', length: 255 })
   className: string;
 
-  @Column({ type: 'varchar', length: 255 }) // Storing original class time + date
+  @Column({ type: 'timestamp with time zone' }) // Storing original class time + date
   classDateTime: string;
 
   @Column({ type: 'varchar', length: 100 })

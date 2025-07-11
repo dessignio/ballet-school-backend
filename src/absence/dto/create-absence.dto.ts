@@ -1,33 +1,38 @@
 // ballet-school-backend/src/absence/dto/create-absence.dto.ts
-// Add imports for validation if using class-validator
-// import { IsString, IsUUID, IsOptional, IsNotEmpty, IsIn } from 'class-validator';
-// import { AbsenceStatus } from '../absence.entity'; // if status was part of create
+import {
+  IsString,
+  IsUUID,
+  IsOptional,
+  IsNotEmpty,
+  IsISO8601,
+} from 'class-validator';
 
 export class CreateAbsenceDto {
-  // @IsUUID()
+  @IsUUID()
+  @IsNotEmpty()
   studentId: string;
 
-  // @IsString()
-  // @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty()
   studentName: string;
 
-  // @IsString()
-  // @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty()
   classId: string;
 
-  // @IsString()
-  // @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty()
   className: string;
 
-  // @IsString()
-  // @IsNotEmpty()
-  classDateTime: string; // e.g., "YYYY-MM-DD HH:mm" or just class time + today's date
+  @IsISO8601()
+  @IsNotEmpty()
+  classDateTime: string;
 
-  // @IsString()
-  // @IsNotEmpty()
+  @IsString()
+  @IsNotEmpty()
   reason: string;
 
-  // @IsString()
-  // @IsOptional()
+  @IsString()
+  @IsOptional()
   notes?: string;
 }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 // src/instructor/dto/create-instructor.dto.ts
 import {
   IsString,
@@ -7,13 +6,12 @@ import {
   IsArray,
   ArrayNotEmpty,
   ValidateNested,
-  IsEnum,
   MaxLength,
-  IsNotEmpty, // Added IsNotEmpty
+  IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InstructorAvailabilitySlotDto } from './instructor-availability-slot.dto';
-import { ProgramName, ProgramNameValues } from '../types/program-name.type';
+import { ProgramName } from '../types/program-name.type';
 
 export class CreateInstructorDto {
   @IsString()
@@ -47,10 +45,7 @@ export class CreateInstructorDto {
 
   @IsArray()
   @ArrayNotEmpty()
-  @IsEnum(ProgramNameValues, {
-    each: true,
-    message: `Each specialization must be one of: ${ProgramNameValues.join(', ')}`,
-  })
+  @IsString({ each: true, message: 'Each specialization must be a string.' })
   specializations: ProgramName[];
 
   @IsOptional()

@@ -37,7 +37,7 @@ export class AttendanceRecord {
   @JoinColumn({ name: 'classOfferingId' })
   classOffering: ClassOffering;
 
-  @Column({ type: 'varchar', length: 16 }) // "YYYY-MM-DD HH:mm"
+  @Column({ type: 'timestamp with time zone' })
   classDateTime: string;
 
   @Column({

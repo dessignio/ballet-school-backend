@@ -500,6 +500,11 @@ export class StripeService {
     newPriceId: string,
   ): Promise<StripeSubscriptionDetails> {
     try {
+      const student = await this.studentRepository.findOne({
+        where: { stripeSubscriptionId: subscriptionId },
+      });
+      const oldPlanName = student?.membershipPlanName || 'an unknown plan';
+
       const subscription =
         await this.stripe.subscriptions.retrieve(subscriptionId);
       const updatedSubscription = await this.stripe.subscriptions.update(
@@ -518,9 +523,19 @@ export class StripeService {
 
       await this.handleSubscriptionUpdated(updatedSubscription);
 
-      const student = await this.studentRepository.findOne({
-        where: { stripeSubscriptionId: updatedSubscription.id },
+      const newPlan = await this.membershipPlanRepository.findOne({
+        where: { stripePriceId: newPriceId },
       });
+
+      if (student && newPlan) {
+        this.notificationGateway.sendNotificationToAll({
+          title: 'Membership Changed',
+          message: `${student.firstName} ${student.lastName}'s plan changed from ${oldPlanName} to ${newPlan.name}.`,
+          type: 'info',
+          link: `/billing`,
+        });
+      }
+
       if (student) {
         this.notificationGateway.broadcastDataUpdate('students', {
           updatedId: student.id,
@@ -558,6 +573,13 @@ export class StripeService {
       });
       await this.stripe.customers.update(student.stripeCustomerId, {
         invoice_settings: { default_payment_method: paymentMethodId },
+      });
+
+      this.notificationGateway.sendNotificationToAll({
+        title: 'Payment Method Updated',
+        message: `${student.firstName} ${student.lastName} has updated their payment method.`,
+        type: 'info',
+        link: `/billing`,
       });
 
       this.notificationGateway.broadcastDataUpdate('students', {
@@ -604,6 +626,13 @@ export class StripeService {
       student.stripeSubscriptionStatus =
         canceledSubscription.status as StripeSubscriptionDetails['status'];
       await this.studentRepository.save(student);
+
+      this.notificationGateway.sendNotificationToAll({
+        title: 'Subscription Canceled',
+        message: `... It will expire on ${new Date((canceledSubscription as any).current_period_end * 1000).toLocaleDateString()}.`,
+        type: 'warning',
+        link: `/billing`,
+      });
 
       this.notificationGateway.broadcastDataUpdate('students', {
         updatedId: student.id,
