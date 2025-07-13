@@ -19,7 +19,7 @@ export class SettingsController {
   async updateStripeSettings(@Body() updateDto: UpdateStripeSettingsDto) {
     await this.settingsService.updateStripeSettings(updateDto);
     return {
-      message: 'Stripe settings updated successfully. Please restart the server for the changes to take effect.',
+      message: 'Stripe settings updated successfully. Server is restarting to apply changes.',
     };
   }
 }

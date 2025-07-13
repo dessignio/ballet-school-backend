@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
+import { exec } from 'child_process';
 import { UpdateStripeSettingsDto } from './dto/update-settings.dto';
 
 @Injectable()
@@ -24,11 +25,13 @@ export class SettingsService {
 
   async updateStripeSettings(dto: UpdateStripeSettingsDto): Promise<void> {
     this.logger.log('Attempting to update .env file with new Stripe settings');
+    let changesMade = false;
     try {
       let envFileContent = '';
       if (fs.existsSync(this.envFilePath)) {
         envFileContent = fs.readFileSync(this.envFilePath, 'utf8');
       }
+      const originalContent = envFileContent;
 
       const settingsMap = {
         STRIPE_PUBLIC_KEY: dto.publicKey,
@@ -39,25 +42,58 @@ export class SettingsService {
       };
 
       Object.entries(settingsMap).forEach(([key, value]) => {
-        if (value !== undefined) { // Only update keys that are present in the DTO
-          const keyRegex = new RegExp(`^${key}=.*$`, 'm');
+        if (value !== undefined) {
+          const keyRegex = new RegExp(`^${key}=.*// backend/settings/settings.service.ts
+, 'm');
           if (envFileContent.match(keyRegex)) {
             envFileContent = envFileContent.replace(keyRegex, `${key}=${value}`);
-            this.logger.log(`Updated existing key: ${key}`);
           } else {
             envFileContent += `\n${key}=${value}`;
-            this.logger.log(`Added new key: ${key}`);
           }
         }
       });
+      
+      if (originalContent !== envFileContent) {
+        changesMade = true;
+        fs.writeFileSync(this.envFilePath, envFileContent.trim());
+        this.logger.log('.env file updated successfully.');
+      } else {
+        this.logger.log('No changes detected in settings. Skipping file write.');
+      }
 
-      fs.writeFileSync(this.envFilePath, envFileContent.trim());
-      this.logger.log(
-        '.env file updated successfully. Note: The application needs to be restarted for changes to take effect.',
-      );
     } catch (error) {
       this.logger.error('Failed to write to .env file', error.stack);
       throw new Error('Failed to update settings file.');
     }
+
+    if (changesMade) {
+      this.triggerServerRestart();
+    }
+  }
+
+  private triggerServerRestart(): void {
+    const pm2ProcessName = this.configService.get<string>('PM2_PROCESS_NAME');
+
+    if (!pm2ProcessName) {
+      this.logger.warn(
+        'PM2_PROCESS_NAME is not set in .env. Automatic restart will be skipped.',
+      );
+      return;
+    }
+
+    this.logger.log(`Settings changed. Triggering restart for PM2 process: ${pm2ProcessName}...`);
+
+    exec(`pm2 restart ${pm2ProcessName}`, (error, stdout, stderr) => {
+      if (error) {
+        this.logger.error(`Failed to restart PM2 process: ${error.message}`);
+        return;
+      }
+      if (stderr) {
+        this.logger.error(`Error during PM2 restart: ${stderr}`);
+        return;
+      }
+      this.logger.log(`PM2 restart command executed successfully: ${stdout}`);
+    });
   }
 }
+
