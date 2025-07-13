@@ -1,4 +1,3 @@
-// backend/settings/settings.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
@@ -42,9 +41,8 @@ export class SettingsService {
       };
 
       Object.entries(settingsMap).forEach(([key, value]) => {
-        if (value !== undefined) {
-          const keyRegex = new RegExp(`^${key}=.*// backend/settings/settings.service.ts
-, 'm');
+        if (value !== undefined && value !== null) {
+          const keyRegex = new RegExp(`^${key}=.*$`, 'm');
           if (envFileContent.match(keyRegex)) {
             envFileContent = envFileContent.replace(keyRegex, `${key}=${value}`);
           } else {
@@ -58,7 +56,7 @@ export class SettingsService {
         fs.writeFileSync(this.envFilePath, envFileContent.trim());
         this.logger.log('.env file updated successfully.');
       } else {
-        this.logger.log('No changes detected in settings. Skipping file write.');
+        this.logger.log('No changes detected in settings. Skipping file write and restart.');
       }
 
     } catch (error) {
@@ -96,4 +94,3 @@ export class SettingsService {
     });
   }
 }
-
