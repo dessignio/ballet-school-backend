@@ -15,6 +15,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Student, StripeSubscriptionStatus } from 'src/student/student.entity';
@@ -33,8 +34,6 @@ import { Invoice } from 'src/invoice/invoice.entity';
 import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 import { NotificationGateway } from 'src/notification/notification.gateway';
 
-const MATRICULA_PRICE_ID = 'price_1RhKKMRoIWWgoaNupnq89OuK';
-
 @Injectable()
 export class StripeService {
   private readonly stripe: Stripe;
@@ -50,11 +49,13 @@ export class StripeService {
     @InjectRepository(Invoice)
     private invoiceRepository: Repository<Invoice>,
     private readonly notificationGateway: NotificationGateway,
+    private readonly configService: ConfigService,
   ) {
-    if (!process.env.STRIPE_SECRET_KEY) {
+    const stripeSecretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    if (!stripeSecretKey) {
       throw new Error('STRIPE_SECRET_KEY is not set in environment variables.');
     }
-    this.stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    this.stripe = new Stripe(stripeSecretKey, {
       // @ts-ignore
       apiVersion: '2024-06-20',
     });
@@ -63,8 +64,12 @@ export class StripeService {
   async createAuditionPaymentIntent(
     paymentDto: CreateAuditionPaymentDto,
   ): Promise<{ clientSecret: string }> {
-    const auditionPriceId = 'price_1RhKYKRoIWWgoaNuDd6TzgUf';
-    const auditionProductId = 'prod_ScZhhq6OolKX7V';
+    const auditionPriceId = this.configService.get<string>('STRIPE_AUDITION_PRICE_ID');
+    const auditionProductId = this.configService.get<string>('STRIPE_AUDITION_PRODUCT_ID');
+
+    if (!auditionPriceId || !auditionProductId) {
+        throw new InternalServerErrorException('Audition Product/Price IDs are not configured.');
+    }
 
     try {
       const price = await this.stripe.prices.retrieve(auditionPriceId);
@@ -112,6 +117,7 @@ export class StripeService {
       );
     }
   }
+
 
   async findOrCreateCustomer(
     studentId: string,
@@ -405,14 +411,19 @@ export class StripeService {
       };
 
       if (!student.stripeSubscriptionId) {
-        this.logger.log(
-          `Adding matricula fee for new subscriber: student ${student.id}`,
-        );
-        subscriptionParams.add_invoice_items = [
-          {
-            price: MATRICULA_PRICE_ID,
-          },
-        ];
+        const enrollmentPriceId = this.configService.get<string>('STRIPE_ENROLLMENT_PRICE_ID');
+        if (enrollmentPriceId) {
+            this.logger.log(
+              `Adding matricula fee for new subscriber: student ${student.id}`,
+            );
+            subscriptionParams.add_invoice_items = [
+              {
+                price: enrollmentPriceId,
+              },
+            ];
+        } else {
+            this.logger.warn('STRIPE_ENROLLMENT_PRICE_ID is not configured. Skipping matricula fee.');
+        }
       }
 
       const subscription =

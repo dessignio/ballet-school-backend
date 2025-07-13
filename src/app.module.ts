@@ -34,6 +34,7 @@ import { ProspectModule } from './prospect/prospect.module'; // Added ProspectMo
 import { ParentModule } from './parent/parent.module';
 import { PortalAuthModule } from './portal-auth/portal-auth.module';
 import { PortalModule } from './portal/portal.module';
+import { SettingsModule } from './settings/settings.module';
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -137,6 +138,7 @@ import { Parent } from './parent/parent.entity';
     ParentModule,
     PortalAuthModule,
     PortalModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [
