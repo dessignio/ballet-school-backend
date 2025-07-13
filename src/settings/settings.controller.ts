@@ -2,7 +2,7 @@
 import { Controller, Get, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { UpdateStripeSettingsDto } from './dto/update-settings.dto';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard) // Protect all routes in this controller
 @Controller('settings')
