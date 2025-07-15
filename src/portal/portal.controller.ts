@@ -9,6 +9,7 @@ interface AuthenticatedRequest extends Request {
     userId: string;
     username: string;
     userType: 'parent' | 'student';
+    studioId: string;
   };
 }
 
@@ -19,7 +20,7 @@ export class PortalController {
   @UseGuards(PortalJwtAuthGuard)
   @Get('me')
   getProfile(@Req() req: AuthenticatedRequest) {
-    const { userId, userType } = req.user;
-    return this.portalService.getProfile(userId, userType);
+    const { userId, userType, studioId } = req.user;
+    return this.portalService.getProfile(userId, userType, studioId);
   }
 }

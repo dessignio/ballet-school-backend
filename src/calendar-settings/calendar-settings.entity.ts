@@ -1,5 +1,6 @@
 // src/calendar-settings/calendar-settings.entity.ts
-import { Entity, Column, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
+import { Studio } from '../studio/studio.entity';
 
 // These interfaces define the shape of objects stored in JSONB columns.
 // They are not separate TypeORM entities.
@@ -20,8 +21,13 @@ export interface StudioRoom {
 
 @Entity('calendar_settings')
 export class CalendarSettings {
-  @PrimaryColumn({ type: 'varchar', default: 'main_calendar_settings' })
-  id: string;
+  @PrimaryColumn({ type: 'uuid', name: 'studio_id' })
+  studioId: string;
+
+  @OneToOne(() => Studio)
+  @JoinColumn({ name: 'studio_id' })
+  studio: Studio;
+
 
   @Column({ type: 'int', default: 60 })
   defaultClassDuration: number; // in minutes

@@ -12,12 +12,17 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ProgramService } from './program.service';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Request } from 'express';
 
 @Controller('programs')
+@UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -30,31 +35,32 @@ export class ProgramController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createProgramDto: CreateProgramDto) {
-    return this.programService.create(createProgramDto);
+  create(@Body() createProgramDto: CreateProgramDto, @Req() req: Request) {
+    return this.programService.create(createProgramDto, req.user);
   }
 
   @Get()
-  findAll() {
-    return this.programService.findAll();
+  findAll(@Req() req: Request) {
+    return this.programService.findAll(req.user);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.programService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return this.programService.findOne(id, req.user);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProgramDto: UpdateProgramDto,
+    @Req() req: Request,
   ) {
-    return this.programService.update(id, updateProgramDto);
+    return this.programService.update(id, updateProgramDto, req.user);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.programService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return this.programService.remove(id, req.user);
   }
 }

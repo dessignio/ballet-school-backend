@@ -15,10 +15,12 @@ import {
   BeforeUpdate,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { Parent } from 'src/parent/parent.entity';
+import { Studio } from '../studio/studio.entity';
 
 // Definimos tipos que podrían ser ENUMs en la base de datos o simplemente strings validados.
 export type Gender = 'Masculino' | 'Femenino' | 'Otro' | 'Prefiero no decirlo';
@@ -56,10 +58,19 @@ export type StripeSubscriptionStatus =
   | 'trialing'
   | null;
 
+@Unique(['username', 'studioId'])
 @Entity('students')
 export class Student {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'uuid', name: 'studio_id' })
+  studioId: string;
+
+  @ManyToOne(() => Studio, studio => studio.students)
+  @JoinColumn({ name: 'studio_id' })
+  studio: Studio;
+
 
   @Column({ type: 'varchar', length: 100 })
   firstName: string;
@@ -67,7 +78,7 @@ export class Student {
   @Column({ type: 'varchar', length: 100 })
   lastName: string;
 
-  @Column({ type: 'varchar', length: 100, unique: true, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   username?: string;
 
   @Column({ type: 'date', nullable: true })

@@ -12,11 +12,18 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { RoleService } from './role.service';
-import { CreateRoleDto } from './dto/create-role.dto';
-import { UpdateRoleDto } from './dto/update-role.dto';
+import {
+  CreateRoleDto,
+  UpdateRoleDto,
+} from './dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Request } from 'express';
 
+@UseGuards(JwtAuthGuard)
 @Controller('roles')
 @UsePipes(
   new ValidationPipe({
@@ -30,31 +37,37 @@ export class RoleController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createRoleDto: CreateRoleDto) {
-    return this.roleService.create(createRoleDto);
+  create(@Body() createRoleDto: CreateRoleDto, @Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.roleService.create(createRoleDto, studioId);
   }
 
   @Get()
-  findAll() {
-    return this.roleService.findAll();
+  findAll(@Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.roleService.findAll(studioId);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.roleService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.roleService.findOne(id, studioId);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateRoleDto: UpdateRoleDto,
+    @Req() req: Request,
   ) {
-    return this.roleService.update(id, updateRoleDto);
+    const studioId = req.user.studioId;
+    return this.roleService.update(id, updateRoleDto, studioId);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.roleService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.roleService.remove(id, studioId);
   }
 }

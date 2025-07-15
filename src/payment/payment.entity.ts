@@ -11,6 +11,7 @@ import {
 import { Student } from 'src/student/student.entity';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { Invoice } from 'src/invoice/invoice.entity'; // For optional link
+import { Studio } from '../studio/studio.entity';
 
 export const PaymentMethodValues = [
   'Cash',
@@ -26,6 +27,14 @@ export type PaymentMethod = (typeof PaymentMethodValues)[number];
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'uuid', name: 'studio_id' })
+  studioId: string;
+
+  @ManyToOne(() => Studio)
+  @JoinColumn({ name: 'studio_id' })
+  studio: Studio;
+
 
   @Column({ type: 'uuid' })
   studentId: string;

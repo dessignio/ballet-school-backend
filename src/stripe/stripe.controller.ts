@@ -22,6 +22,7 @@ import {
   Res,
   StreamableFile,
   Patch,
+  UseGuards,
 } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import {
@@ -40,12 +41,15 @@ import {
 } from 'express';
 import { Public } from 'src/auth/decorators/public.decorator';
 import * as https from 'https';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Request } from 'express';
 
 interface RequestWithRawBody extends ExpressRequest {
   rawBody?: any;
 }
 
 @Controller('stripe')
+@UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -56,33 +60,42 @@ interface RequestWithRawBody extends ExpressRequest {
 export class StripeController {
   constructor(private readonly stripeService: StripeService) {}
 
+  @Public()
   @Post('create-audition-payment')
   createAuditionPaymentIntent(
     @Body() paymentDto: CreateAuditionPaymentDto,
+    @Req() req,
   ): Promise<{ clientSecret: string }> {
-    return this.stripeService.createAuditionPaymentIntent(paymentDto);
+    const studioId = req.user.studioId;
+    return this.stripeService.createAuditionPaymentIntent(paymentDto, studioId);
   }
 
   @Get('metrics')
-  getFinancialMetrics(): Promise<FinancialMetricsDto> {
-    return this.stripeService.getFinancialMetrics();
+  getFinancialMetrics(@Req() req): Promise<FinancialMetricsDto> {
+    const studioId = req.user.studioId;
+    return this.stripeService.getFinancialMetrics(studioId);
   }
 
   @Post('subscriptions')
   createSubscription(
     @Body() createSubDto: CreateStripeSubscriptionDto,
+    @Req() req,
   ): Promise<StripeSubscriptionDetails> {
-    return this.stripeService.createSubscription(createSubDto);
+    const studioId = req.user.studioId;
+    return this.stripeService.createSubscription(createSubDto, studioId);
   }
 
   @Patch('subscriptions/:subscriptionId/change-plan')
   changeSubscriptionPlan(
     @Param('subscriptionId') subscriptionId: string,
     @Body() changePlanDto: ChangeStripeSubscriptionPlanDto,
+    @Req() req,
   ): Promise<StripeSubscriptionDetails> {
+    const studioId = req.user.studioId;
     return this.stripeService.updateSubscription(
       subscriptionId,
       changePlanDto.newPriceId,
+      studioId,
     );
   }
 
@@ -91,10 +104,13 @@ export class StripeController {
   updatePaymentMethod(
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Body() updateDto: UpdatePaymentMethodDto,
+    @Req() req,
   ): Promise<{ success: boolean }> {
+    const studioId = req.user.studioId;
     return this.stripeService.updatePaymentMethod(
       studentId,
       updateDto.paymentMethodId,
+      studioId,
     );
   }
 
@@ -106,9 +122,11 @@ export class StripeController {
   @Get('students/:studentId/stripe-subscription')
   async getStudentSubscription(
     @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Req() req,
   ): Promise<StripeSubscriptionDetails> {
+    const studioId = req.user.studioId;
     const subscription =
-      await this.stripeService.getStudentSubscription(studentId);
+      await this.stripeService.getStudentSubscription(studentId, studioId);
 
     if (!subscription) {
       throw new NotFoundException(
@@ -154,7 +172,6 @@ export class StripeController {
               statusCode < 400 &&
               pdfStream.headers.location
             ) {
-              // Handle redirect by consuming the current response and making a new request
               pdfStream.resume();
               makeRequest(pdfStream.headers.location, redirectCount + 1);
               return;
@@ -184,28 +201,32 @@ export class StripeController {
           });
       };
 
-      makeRequest(pdfUrl); // Initial call
+      makeRequest(pdfUrl);
     });
   }
 
   @Get('payments')
-  getStudentPayments(@Query('studentId', ParseUUIDPipe) studentId: string) {
-    return this.stripeService.getPaymentsForStudent(studentId);
+  getStudentPayments(@Query('studentId', ParseUUIDPipe) studentId: string, @Req() req) {
+    const studioId = req.user.studioId;
+    return this.stripeService.getPaymentsForStudent(studentId, studioId);
   }
 
   @Get('invoices')
-  getStudentInvoices(@Query('studentId', ParseUUIDPipe) studentId: string) {
-    return this.stripeService.getInvoicesForStudent(studentId);
+  getStudentInvoices(@Query('studentId', ParseUUIDPipe) studentId: string, @Req() req: Request) {
+    return this.stripeService.getInvoicesForStudent(studentId, req.user);
   }
 
   @Delete('subscriptions/:subscriptionId/cancel')
   async cancelSubscription(
     @Param('subscriptionId') subscriptionId: string,
     @Body('studentId', ParseUUIDPipe) studentId: string,
+    @Req() req,
   ): Promise<StripeSubscriptionDetails> {
+    const studioId = req.user.studioId;
     const subscription = await this.stripeService.cancelSubscription(
       studentId,
       subscriptionId,
+      studioId,
     );
     if (!subscription) {
       throw new InternalServerErrorException(

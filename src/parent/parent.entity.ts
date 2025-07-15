@@ -13,15 +13,28 @@ import {
   BeforeInsert,
   BeforeUpdate,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
+  Unique,
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Address } from 'src/student/student.entity'; // Reuse Address type
 import { Student } from 'src/student/student.entity';
+import { Studio } from '../studio/studio.entity';
 
+@Unique(['username', 'studioId'])
 @Entity('parents')
 export class Parent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'uuid', name: 'studio_id' })
+  studioId: string;
+
+  @ManyToOne(() => Studio)
+  @JoinColumn({ name: 'studio_id' })
+  studio: Studio;
+
 
   @Column({ type: 'varchar', length: 100 })
   firstName: string;
@@ -38,7 +51,7 @@ export class Parent {
   @Column({ type: 'jsonb', nullable: true })
   address?: Address;
 
-  @Column({ type: 'varchar', length: 100, unique: true })
+  @Column({ type: 'varchar', length: 100 })
   username: string;
 
   @Column({ type: 'varchar', length: 255, select: false })

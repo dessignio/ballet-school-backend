@@ -174,4 +174,7 @@ export class CreateStudentDto {
   @IsOptional()
   @IsUUID('4', { message: 'Parent ID must be a valid UUID.' })
   parentId?: string | null;
+
+  @IsUUID('4', { message: 'Studio ID must be a valid UUID.' })
+  studioId: string;
 }

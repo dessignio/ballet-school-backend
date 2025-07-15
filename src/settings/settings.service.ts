@@ -1,72 +1,63 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { UpdateStripeSettingsDto } from './dto/update-settings.dto';
+import { StripeSettings } from '../stripe/stripe-settings.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
-import { UpdateStripeSettingsDto } from './dto/update-settings.dto';
 
 @Injectable()
 export class SettingsService {
   private readonly logger = new Logger(SettingsService.name);
   private readonly envFilePath = path.resolve(process.cwd(), '.env');
 
-  constructor(private configService: ConfigService) {}
+  constructor(
+    private configService: ConfigService,
+    @InjectRepository(StripeSettings)
+    private stripeSettingsRepository: Repository<StripeSettings>,
+  ) {}
 
-  getStripeSettings() {
+  async getStripeSettings(studioId: string) {
+    const settings = await this.stripeSettingsRepository.findOneBy({ studioId });
+    if (!settings) {
+      // Return default or throw an error if settings are expected to exist
+      return {
+        publicKey: this.configService.get<string>('STRIPE_PUBLIC_KEY'), // Public key can still be global
+        enrollmentProductId: null,
+        enrollmentPriceId: null,
+        auditionProductId: null,
+        auditionPriceId: null,
+      };
+    }
     return {
-      publicKey: this.configService.get<string>('STRIPE_PUBLIC_KEY'),
-      enrollmentProductId: this.configService.get<string>('STRIPE_ENROLLMENT_PRODUCT_ID'),
-      enrollmentPriceId: this.configService.get<string>('STRIPE_ENROLLMENT_PRICE_ID'),
-      auditionProductId: this.configService.get<string>('STRIPE_AUDITION_PRODUCT_ID'),
-      auditionPriceId: this.configService.get<string>('STRIPE_AUDITION_PRICE_ID'),
+      publicKey: this.configService.get<string>('STRIPE_PUBLIC_KEY'), // Public key can still be global
+      enrollmentProductId: settings.enrollmentProductId,
+      enrollmentPriceId: settings.enrollmentPriceId,
+      auditionProductId: settings.auditionProductId,
+      auditionPriceId: settings.auditionPriceId,
     };
   }
 
-  async updateStripeSettings(dto: UpdateStripeSettingsDto): Promise<void> {
-    this.logger.log('Attempting to update .env file with new Stripe settings');
-    let changesMade = false;
-    try {
-      let envFileContent = '';
-      if (fs.existsSync(this.envFilePath)) {
-        envFileContent = fs.readFileSync(this.envFilePath, 'utf8');
-      }
-      const originalContent = envFileContent;
+  async updateStripeSettings(dto: UpdateStripeSettingsDto, studioId: string): Promise<void> {
+    this.logger.log(`Attempting to update Stripe settings for studio ${studioId}`);
+    let settings = await this.stripeSettingsRepository.findOneBy({ studioId });
 
-      const settingsMap = {
-        STRIPE_PUBLIC_KEY: dto.publicKey,
-        STRIPE_ENROLLMENT_PRODUCT_ID: dto.enrollmentProductId,
-        STRIPE_ENROLLMENT_PRICE_ID: dto.enrollmentPriceId,
-        STRIPE_AUDITION_PRODUCT_ID: dto.auditionProductId,
-        STRIPE_AUDITION_PRICE_ID: dto.auditionPriceId,
-      };
-
-      Object.entries(settingsMap).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          const keyRegex = new RegExp(`^${key}=.*$`, 'm');
-          if (envFileContent.match(keyRegex)) {
-            envFileContent = envFileContent.replace(keyRegex, `${key}=${value}`);
-          } else {
-            envFileContent += `\n${key}=${value}`;
-          }
-        }
-      });
-      
-      if (originalContent !== envFileContent) {
-        changesMade = true;
-        fs.writeFileSync(this.envFilePath, envFileContent.trim());
-        this.logger.log('.env file updated successfully.');
-      } else {
-        this.logger.log('No changes detected in settings. Skipping file write and restart.');
-      }
-
-    } catch (error) {
-      this.logger.error('Failed to write to .env file', error.stack);
-      throw new Error('Failed to update settings file.');
+    if (!settings) {
+      settings = this.stripeSettingsRepository.create({ studioId });
     }
 
-    if (changesMade) {
-      this.triggerServerRestart();
-    }
+    // Update fields from DTO
+    if (dto.enrollmentProductId !== undefined) settings.enrollmentProductId = dto.enrollmentProductId;
+    if (dto.enrollmentPriceId !== undefined) settings.enrollmentPriceId = dto.enrollmentPriceId;
+    if (dto.auditionProductId !== undefined) settings.auditionProductId = dto.auditionProductId;
+    if (dto.auditionPriceId !== undefined) settings.auditionPriceId = dto.auditionPriceId;
+
+    await this.stripeSettingsRepository.save(settings);
+    this.logger.log(`Stripe settings for studio ${studioId} updated successfully.`);
+
+    // No need to restart server for database changes
   }
 
   private triggerServerRestart(): void {

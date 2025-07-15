@@ -1,28 +1,31 @@
 // src/calendar-settings/calendar-settings.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CalendarSettings } from './calendar-settings.entity';
 import { UpdateCalendarSettingsDto } from './dto';
+import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Injectable()
 export class CalendarSettingsService {
-  private readonly settingsId = 'main_calendar_settings';
-
   constructor(
     @InjectRepository(CalendarSettings)
     private settingsRepository: Repository<CalendarSettings>,
   ) {}
 
-  async getSettings(): Promise<CalendarSettings> {
+  async getSettings(user: Partial<AdminUser>): Promise<CalendarSettings> {
+    const studioId = user.studioId;
+    if (!studioId) {
+        throw new BadRequestException('User is not associated with a studio.');
+    }
+
     let settings = await this.settingsRepository.findOneBy({
-      id: this.settingsId,
+      studioId: studioId,
     });
 
     if (!settings) {
-      // If no settings exist, create and return default ones.
       settings = this.settingsRepository.create({
-        id: this.settingsId,
+        studioId: studioId,
         defaultClassDuration: 60,
         studioTimezone: 'America/New_York',
         weekStartDay: 0,
@@ -36,11 +39,10 @@ export class CalendarSettingsService {
 
   async updateSettings(
     updateDto: UpdateCalendarSettingsDto,
+    user: Partial<AdminUser>,
   ): Promise<CalendarSettings> {
-    const settings = await this.getSettings(); // Ensures settings exist
+    const settings = await this.getSettings(user);
 
-    // The DTO has the full shape of what can be updated.
-    // We can merge it directly.
     const updatedSettings = this.settingsRepository.merge(settings, updateDto);
 
     return this.settingsRepository.save(updatedSettings);

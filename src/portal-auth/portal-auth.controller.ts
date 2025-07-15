@@ -28,6 +28,7 @@ export class PortalAuthController {
     const user: ValidatedUser | null = await this.authService.validateUser(
       loginDto.username,
       loginDto.password,
+      loginDto.studioId,
     );
 
     if (!user) {

@@ -35,6 +35,7 @@ import { ParentModule } from './parent/parent.module';
 import { PortalAuthModule } from './portal-auth/portal-auth.module';
 import { PortalModule } from './portal/portal.module';
 import { SettingsModule } from './settings/settings.module';
+import { StudioModule } from './studio/studio.module';
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -56,6 +57,7 @@ import { GeneralSettings } from './general-settings/general-settings.entity';
 import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
 import { Prospect } from './prospect/prospect.entity'; // Added Prospect Entity
 import { Parent } from './parent/parent.entity';
+import { Studio } from './studio/studio.entity';
 
 @Module({
   imports: [
@@ -98,6 +100,7 @@ import { Parent } from './parent/parent.entity';
           CalendarSettings,
           Prospect,
           Parent,
+          Studio,
         ],
 
         // Sincroniza la base de datos.
@@ -139,6 +142,7 @@ import { Parent } from './parent/parent.entity';
     PortalAuthModule,
     PortalModule,
     SettingsModule,
+    StudioModule,
   ],
   controllers: [AppController],
   providers: [

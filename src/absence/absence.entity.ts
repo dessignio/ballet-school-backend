@@ -4,7 +4,10 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Studio } from '../studio/studio.entity';
 
 export type AbsenceStatus = 'Notificada' | 'Justificada' | 'No Justificada';
 
@@ -12,6 +15,14 @@ export type AbsenceStatus = 'Notificada' | 'Justificada' | 'No Justificada';
 export class Absence {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ type: 'uuid', name: 'studio_id' })
+  studioId: string;
+
+  @ManyToOne(() => Studio)
+  @JoinColumn({ name: 'studio_id' })
+  studio: Studio;
+
 
   @Column({ type: 'uuid' }) // Assuming student.id is a UUID
   studentId: string;

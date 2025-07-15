@@ -21,15 +21,16 @@ export class PortalAuthService {
   async validateUser(
     username: string,
     pass: string,
+    studioId: string,
   ): Promise<ValidatedUser | null> {
     // 1. Check if it's a parent
-    const parent = await this.parentService.findByUsername(username);
+    const parent = await this.parentService.findByUsername(username, studioId);
     if (parent && (await parent.validatePassword(pass))) {
       return { id: parent.id, username: parent.username, userType: 'parent' };
     }
 
     // 2. Check if it's a student
-    const student = await this.studentService.findByUsername(username);
+    const student = await this.studentService.findByUsername(username, studioId);
     if (student && student.username && (await student.validatePassword(pass))) {
       return {
         id: student.id,

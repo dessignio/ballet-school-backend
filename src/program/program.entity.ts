@@ -5,19 +5,29 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Unique,
 } from 'typeorm';
-// ProgramName and DancerLevelName types are now just 'string', so direct import might not be needed
-// if used just as 'string'. If you had specific string literal types, they've been broadened.
+import { Studio } from '../studio/studio.entity';
 
+@Unique(['name', 'studioId'])
 @Entity('programs')
 export class Program {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'uuid', name: 'studio_id' })
+  studioId: string;
+
+  @ManyToOne(() => Studio, studio => studio.programs)
+  @JoinColumn({ name: 'studio_id' })
+  studio: Studio;
+
+
   @Column({
     type: 'varchar',
     length: 255,
-    unique: true,
     nullable: false, // Explicitly set to NOT NULL
   })
   name: string; // Was ProgramName, now just string

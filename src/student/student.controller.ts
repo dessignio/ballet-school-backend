@@ -15,36 +15,40 @@ import {
   UsePipes,
   ValidationPipe,
   BadRequestException,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { StudentService, SafeStudent } from './student.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Request } from 'express';
 
 @Controller('students')
+@UseGuards(JwtAuthGuard)
 @UsePipes(
-  // Aplica validación a todos los DTOs en este controlador
   new ValidationPipe({
-    whitelist: true, // Ignora propiedades no definidas en el DTO
-    forbidNonWhitelisted: true, // Lanza un error si se envían propiedades no permitidas
-    transform: true, // Transforma los datos de entrada a sus tipos de DTO
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
   }),
 )
 export class StudentController {
   constructor(private readonly studentService: StudentService) {}
 
   @Post()
-  create(@Body() createStudentDto: CreateStudentDto): Promise<SafeStudent> {
-    return this.studentService.create(createStudentDto);
+  create(@Body() createStudentDto: CreateStudentDto, @Req() req: Request): Promise<SafeStudent> {
+    return this.studentService.create(createStudentDto, req.user);
   }
 
   @Get()
-  findAll(): Promise<SafeStudent[]> {
-    return this.studentService.findAll();
+  findAll(@Req() req: Request): Promise<SafeStudent[]> {
+    return this.studentService.findAll(req.user);
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<SafeStudent> {
-    const student = await this.studentService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<SafeStudent> {
+    const student = await this.studentService.findOne(id, req.user);
     return student;
   }
 
@@ -52,17 +56,19 @@ export class StudentController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateStudentDto: UpdateStudentDto,
+    @Req() req: Request,
   ): Promise<SafeStudent> {
     const updatedStudent = await this.studentService.update(
       id,
       updateStudentDto,
+      req.user,
     );
     return updatedStudent;
   }
 
   @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT) // Devuelve un código 204 (No Content) en caso de éxito
-  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.studentService.remove(id);
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<void> {
+    await this.studentService.remove(id, req.user);
   }
 }

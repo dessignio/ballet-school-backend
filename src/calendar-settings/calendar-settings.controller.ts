@@ -6,12 +6,17 @@ import {
   Body,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { CalendarSettingsService } from './calendar-settings.service';
 import { CalendarSettings } from './calendar-settings.entity';
 import { UpdateCalendarSettingsDto } from './dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Request } from 'express';
 
 @Controller('settings/calendar')
+@UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -23,15 +28,15 @@ export class CalendarSettingsController {
   constructor(private readonly settingsService: CalendarSettingsService) {}
 
   @Get()
-  async getSettings(): Promise<CalendarSettings> {
-    return this.settingsService.getSettings();
+  async getSettings(@Req() req: Request): Promise<CalendarSettings> {
+    return this.settingsService.getSettings(req.user);
   }
 
-  // Use PUT for a full replacement of the settings document
   @Put()
   async updateSettings(
     @Body() updateDto: UpdateCalendarSettingsDto,
+    @Req() req: Request,
   ): Promise<CalendarSettings> {
-    return this.settingsService.updateSettings(updateDto);
+    return this.settingsService.updateSettings(updateDto, req.user);
   }
 }

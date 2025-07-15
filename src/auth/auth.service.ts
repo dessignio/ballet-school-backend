@@ -34,8 +34,8 @@ export class AuthService {
     const payload = {
       username: user.username,
       sub: user.id,
-      roleId: user.roleId, // Include roleId for potential frontend use
-      // We can add more payload data if needed, like permissions
+      roleId: user.roleId,
+      studioId: user.studioId, // Add studioId to the JWT payload
     };
     return {
       access_token: this.jwtService.sign(payload),

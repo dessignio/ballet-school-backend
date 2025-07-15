@@ -5,15 +5,25 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
-import { PermissionKey } from './types/permission-key.type'; // Using the defined type
+import { PermissionKey } from './types/permission-key.type';
+import { Studio } from '../studio/studio.entity';
 
 @Entity('roles')
 export class Role {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 100, unique: true })
+  @Column({ type: 'uuid', name: 'studio_id' })
+  studioId: string;
+
+  @ManyToOne(() => Studio, (studio) => studio.roles)
+  @JoinColumn({ name: 'studio_id' })
+  studio: Studio;
+
+  @Column({ length: 100 })
   name: string;
 
   @Column({ length: 255, nullable: true })

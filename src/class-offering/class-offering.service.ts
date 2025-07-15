@@ -6,6 +6,7 @@ import {
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -13,6 +14,7 @@ import { ClassOffering } from './class-offering.entity';
 import { CreateClassOfferingDto } from './dto/create-class-offering.dto';
 import { UpdateClassOfferingDto } from './dto/update-class-offering.dto';
 import { ScheduledClassSlot } from 'src/scheduled-class-slot/scheduled-class-slot.entity';
+import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Injectable()
 export class ClassOfferingService {
@@ -25,24 +27,30 @@ export class ClassOfferingService {
 
   async create(
     createClassOfferingDto: CreateClassOfferingDto,
+    user: Partial<AdminUser>,
   ): Promise<ClassOffering> {
     const { scheduledClassSlots: newSlotsData, ...restOfDto } =
       createClassOfferingDto;
+    
+    const studioId = user.studioId;
+    if (!studioId) {
+        throw new BadRequestException('User is not associated with a studio.');
+    }
 
     const existingOfferingByName = await this.classOfferingRepository.findOne({
-      where: { name: restOfDto.name },
+      where: { name: restOfDto.name, studioId },
     });
     if (existingOfferingByName) {
       throw new ConflictException(
-        `Class offering with name "${restOfDto.name}" already exists.`,
+        `Class offering with name "${restOfDto.name}" already exists in this studio.`,
       );
     }
 
     const classOffering = this.classOfferingRepository.create({
       ...restOfDto,
-      enrolledCount: 0, // Initialize enrolledCount
-      // capacity is taken directly from restOfDto
-      scheduledClassSlots: [], // Initialize as empty, will be populated below
+      studioId,
+      enrolledCount: 0,
+      scheduledClassSlots: [],
     });
 
     if (newSlotsData && newSlotsData.length > 0) {
@@ -68,16 +76,17 @@ export class ClassOfferingService {
     }
   }
 
-  async findAll(): Promise<ClassOffering[]> {
+  async findAll(user: Partial<AdminUser>): Promise<ClassOffering[]> {
     return this.classOfferingRepository.find({
+      where: { studioId: user.studioId },
       relations: ['scheduledClassSlots'],
       order: { name: 'ASC' },
     });
   }
 
-  async findOne(id: string): Promise<ClassOffering> {
+  async findOne(id: string, user: Partial<AdminUser>): Promise<ClassOffering> {
     const classOffering = await this.classOfferingRepository.findOne({
-      where: { id },
+      where: { id, studioId: user.studioId },
       relations: ['scheduledClassSlots'],
     });
     if (!classOffering) {
@@ -89,15 +98,13 @@ export class ClassOfferingService {
   async update(
     id: string,
     updateClassOfferingDto: UpdateClassOfferingDto,
+    user: Partial<AdminUser>,
   ): Promise<ClassOffering> {
-    // Destructure scheduledClassSlots and the rest of the DTO
-    // Note: The type of `restOfUpdateDto` will be Omit<UpdateClassOfferingDto, 'scheduledClassSlots'>
-    // which is Omit<Partial<CreateClassOfferingDto>, 'scheduledClassSlots'>
     const { scheduledClassSlots: updatedSlotsData, ...restOfUpdateDto } =
       updateClassOfferingDto;
 
     const classOffering = await this.classOfferingRepository.findOne({
-      where: { id },
+      where: { id, studioId: user.studioId },
       relations: ['scheduledClassSlots'],
     });
 
@@ -107,10 +114,9 @@ export class ClassOfferingService {
       );
     }
 
-    // Now 'restOfUpdateDto' should correctly have 'name' as an optional property.
     if (restOfUpdateDto.name && restOfUpdateDto.name !== classOffering.name) {
       const existingOfferingByName = await this.classOfferingRepository.findOne(
-        { where: { name: restOfUpdateDto.name } },
+        { where: { name: restOfUpdateDto.name, studioId: user.studioId } },
       );
       if (existingOfferingByName && existingOfferingByName.id !== id) {
         throw new ConflictException(
@@ -127,7 +133,7 @@ export class ClassOfferingService {
           !updatedSlotsData.find(
             (updatedSlot) =>
               updatedSlot.id === existingSlot.id && updatedSlot.id,
-          ), // Ensure updatedSlot.id exists for comparison
+          ),
       );
       if (slotsToRemove.length > 0) {
         await this.scheduledClassSlotRepository.remove(slotsToRemove);
@@ -167,8 +173,8 @@ export class ClassOfferingService {
     }
   }
 
-  async remove(id: string): Promise<void> {
-    const result = await this.classOfferingRepository.delete(id);
+  async remove(id: string, user: Partial<AdminUser>): Promise<void> {
+    const result = await this.classOfferingRepository.delete({ id, studioId: user.studioId });
     if (result.affected === 0) {
       throw new NotFoundException(
         `ClassOffering with ID "${id}" not found to delete`,
@@ -176,13 +182,13 @@ export class ClassOfferingService {
     }
   }
 
-  async incrementEnrolledCount(id: string): Promise<void> {
-    await this.classOfferingRepository.increment({ id }, 'enrolledCount', 1);
+  async incrementEnrolledCount(id: string, studioId: string): Promise<void> {
+    await this.classOfferingRepository.increment({ id, studioId }, 'enrolledCount', 1);
   }
 
-  async decrementEnrolledCount(id: string): Promise<void> {
+  async decrementEnrolledCount(id: string, studioId: string): Promise<void> {
     await this.classOfferingRepository.decrement(
-      { id, enrolledCount: In([1, null]) },
+      { id, studioId, enrolledCount: In([1, null]) },
       'enrolledCount',
       1,
     );

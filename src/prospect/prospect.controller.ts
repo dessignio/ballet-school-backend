@@ -11,6 +11,8 @@ import {
   ParseUUIDPipe,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ProspectService } from './prospect.service';
 import {
@@ -18,7 +20,10 @@ import {
   UpdateProspectDto,
   ApproveProspectDto,
 } from './dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Request } from 'express';
 
+@UseGuards(JwtAuthGuard)
 @Controller('prospects')
 @UsePipes(
   new ValidationPipe({
@@ -31,39 +36,47 @@ export class ProspectController {
   constructor(private readonly prospectService: ProspectService) {}
 
   @Post()
-  create(@Body() createProspectDto: CreateProspectDto) {
-    return this.prospectService.create(createProspectDto);
+  create(@Body() createProspectDto: CreateProspectDto, @Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.prospectService.create(createProspectDto, studioId);
   }
 
   @Get()
-  findAll() {
-    return this.prospectService.findAll();
+  findAll(@Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.prospectService.findAll(studioId);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.prospectService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.prospectService.findOne(id, studioId);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProspectDto: UpdateProspectDto,
+    @Req() req: Request,
   ) {
-    return this.prospectService.update(id, updateProspectDto);
+    const studioId = req.user.studioId;
+    return this.prospectService.update(id, updateProspectDto, studioId);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.prospectService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    const studioId = req.user.studioId;
+    return this.prospectService.remove(id, studioId);
   }
 
   @Post(':id/approve')
   approve(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() approveDto: ApproveProspectDto,
+    @Req() req: Request,
   ) {
-    return this.prospectService.approve(id, approveDto);
+    const studioId = req.user.studioId;
+    return this.prospectService.approve(id, approveDto, studioId);
   }
 }

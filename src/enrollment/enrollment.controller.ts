@@ -14,12 +14,17 @@ import {
   UsePipes,
   ValidationPipe,
   NotFoundException,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { EnrollmentService, MappedEnrollment } from './enrollment.service';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { Request } from 'express';
 
 @Controller('enrollments')
+@UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -34,53 +39,45 @@ export class EnrollmentController {
   @HttpCode(HttpStatus.CREATED)
   create(
     @Body() createEnrollmentDto: CreateEnrollmentDto,
+    @Req() req: Request,
   ): Promise<MappedEnrollment> {
-    return this.enrollmentService.create(createEnrollmentDto);
+    return this.enrollmentService.create(createEnrollmentDto, req.user);
   }
 
   @Get()
   findAll(
     @Query('classOfferingId') classOfferingId?: string,
     @Query('studentId') studentId?: string,
+    @Req() req: Request,
   ): Promise<MappedEnrollment[]> {
-    if (classOfferingId && !this.isValidUUID(classOfferingId)) {
-      throw new NotFoundException('Invalid Class Offering ID format.');
-    }
-    if (studentId && !this.isValidUUID(studentId)) {
-      throw new NotFoundException('Invalid Student ID format.');
-    }
-    return this.enrollmentService.findAllByCriteria(classOfferingId, studentId);
+    return this.enrollmentService.findAllByCriteria(req.user, classOfferingId, studentId);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<MappedEnrollment> {
-    return this.enrollmentService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<MappedEnrollment> {
+    return this.enrollmentService.findOne(id, req.user);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateEnrollmentDto: UpdateEnrollmentDto,
+    @Req() req: Request,
   ): Promise<MappedEnrollment> {
-    return this.enrollmentService.update(id, updateEnrollmentDto);
+    return this.enrollmentService.update(id, updateEnrollmentDto, req.user);
   }
 
-  // This custom route matches the frontend apiService
   @Delete('student/:studentId/class/:classOfferingId')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeByStudentAndClass(
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Param('classOfferingId', ParseUUIDPipe) classOfferingId: string,
+    @Req() req: Request,
   ): Promise<void> {
     return this.enrollmentService.removeByStudentAndClass(
       studentId,
       classOfferingId,
+      req.user,
     );
-  }
-
-  private isValidUUID(id: string): boolean {
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(id);
   }
 }
