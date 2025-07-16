@@ -1,9 +1,11 @@
 // ballet-school-backend/src/school-event/school-event.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+// CORRECCIÓN: Importar 'Between' y 'FindOptionsWhere' de typeorm
+import { Repository, Between, FindOptionsWhere } from 'typeorm';
 import { SchoolEvent } from './school-event.entity';
 import { CreateSchoolEventDto, UpdateSchoolEventDto } from './dto';
+import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Injectable()
 export class SchoolEventService {
@@ -14,52 +16,71 @@ export class SchoolEventService {
 
   async create(
     createSchoolEventDto: CreateSchoolEventDto,
+    user: Partial<AdminUser>,
   ): Promise<SchoolEvent> {
-    const newEvent = this.schoolEventRepository.create(createSchoolEventDto);
+    const newEvent = this.schoolEventRepository.create({
+      ...createSchoolEventDto,
+      studioId: user.studioId,
+    });
     return this.schoolEventRepository.save(newEvent);
   }
 
-  async findAll(month?: number, year?: number): Promise<SchoolEvent[]> {
+  async findAll(
+    // CORRECCIÓN 1: 'user' ahora es requerido, ya no tiene '?'
+    user: Partial<AdminUser>,
+    month?: number,
+    year?: number,
+  ): Promise<SchoolEvent[]> {
+    // CORRECCIÓN 2: Usamos un tipo seguro en lugar de 'any'
+    const whereClause: FindOptionsWhere<SchoolEvent> = {
+      studioId: user.studioId,
+    };
+
     if (month && year) {
-      // Month is 1-indexed from query, TypeORM works with string dates for Between
       const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-      // To get the end date, go to the next month and get the 0th day (which is the last day of current month)
       const nextMonth = month === 12 ? 1 : month + 1;
       const nextYear = month === 12 ? year + 1 : year;
-      const lastDayOfMonth = new Date(nextYear, nextMonth - 1, 0).getDate(); // month for Date is 0-indexed
+      const lastDayOfMonth = new Date(nextYear, nextMonth - 1, 0).getDate();
       const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
 
-      return this.schoolEventRepository.find({
-        where: {
-          date: Between(startDate, endDate),
-        },
-        order: { date: 'ASC' },
-      });
+      // Ya no hay error de 'unsafe access' porque 'whereClause' está bien tipado
+      whereClause.date = Between(startDate, endDate);
     }
-    return this.schoolEventRepository.find({ order: { date: 'ASC' } });
+
+    return this.schoolEventRepository.find({
+      where: whereClause,
+      order: { date: 'ASC' },
+    });
   }
 
-  async findOne(id: string): Promise<SchoolEvent | null> {
-    return this.schoolEventRepository.findOneBy({ id });
+  // CORRECCIÓN 3: Se aplica el formato de Prettier
+  async findOne(
+    id: string,
+    user: Partial<AdminUser>,
+  ): Promise<SchoolEvent | null> {
+    return this.schoolEventRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
   }
 
   async update(
     id: string,
     updateSchoolEventDto: UpdateSchoolEventDto,
+    user: Partial<AdminUser>,
   ): Promise<SchoolEvent | null> {
     const event = await this.schoolEventRepository.preload({
       id,
       ...updateSchoolEventDto,
+      studioId: user.studioId,
     });
     if (!event) {
-      return null; // Controller will throw NotFoundException
+      return null;
     }
     return this.schoolEventRepository.save(event);
   }
 
-  async remove(id: string): Promise<void> {
-    await this.schoolEventRepository.delete(id);
-    // TypeORM delete does not throw error if not found, just affects 0 rows.
-    // Controller should check existence before calling remove if specific 404 is needed for delete.
+  async remove(id: string, user: Partial<AdminUser>): Promise<void> {
+    await this.schoolEventRepository.delete({ id, studioId: user.studioId });
   }
 }

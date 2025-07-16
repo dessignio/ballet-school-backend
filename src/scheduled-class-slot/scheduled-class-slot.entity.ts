@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 // ballet-school-backend/src/scheduled-class-slot/scheduled-class-slot.entity.ts
 import {
   Entity,
@@ -7,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { ClassOffering } from '../class-offering/class-offering.entity';
+import { Studio } from '../studio/studio.entity'; // Assuming Studio entity path
 
 @Entity('scheduled_class_slots')
 export class ScheduledClassSlot {
@@ -36,4 +38,14 @@ export class ScheduledClassSlot {
   )
   @JoinColumn({ name: 'classOfferingId' })
   classOffering: ClassOffering;
+
+  // Foreign Key to Studio for multi-tenancy
+  @Column({ type: 'uuid' })
+  studioId: string;
+
+  @ManyToOne(() => Studio, (studio: Studio) => studio.scheduledClassSlots, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'studioId' })
+  studio: Studio;
 }

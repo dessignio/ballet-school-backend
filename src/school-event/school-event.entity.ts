@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 // ballet-school-backend/src/school-event/school-event.entity.ts
 import {
   Entity,
@@ -5,7 +6,10 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Studio } from '../studio/studio.entity'; // Assuming Studio entity path
 
 @Entity('school_events')
 export class SchoolEvent {
@@ -29,4 +33,14 @@ export class SchoolEvent {
 
   @UpdateDateColumn({ type: 'timestamp with time zone' })
   updatedAt: Date;
+
+  // Foreign Key to Studio for multi-tenancy
+  @Column({ type: 'uuid' })
+  studioId: string;
+
+  @ManyToOne(() => Studio, (studio: Studio) => studio.schoolEvents, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'studioId' })
+  studio: Studio;
 }

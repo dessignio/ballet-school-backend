@@ -81,4 +81,6 @@ export class Studio {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+  scheduledClassSlots: any;
+  schoolEvents: any;
 }
