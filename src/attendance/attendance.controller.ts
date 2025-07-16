@@ -20,6 +20,7 @@ import { CreateAttendanceDto, BulkMarkAttendanceDto } from './dto';
 import { AttendanceRecord } from './attendance.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Importar AdminUser
 
 @Controller('attendance')
 @UseGuards(JwtAuthGuard)
@@ -42,10 +43,11 @@ export class AttendanceController {
     if (!date) {
       throw new BadRequestException('Date parameter is required.');
     }
+    // Aplicar aserción de tipo
     return this.attendanceService.findByClassAndDate(
       classOfferingId,
       date,
-      req.user,
+      req.user as Partial<AdminUser>,
     );
   }
 
@@ -54,7 +56,8 @@ export class AttendanceController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<AttendanceRecord> {
-    return this.attendanceService.findOne(id, req.user);
+    // Aplicar aserción de tipo
+    return this.attendanceService.findOne(id, req.user as Partial<AdminUser>);
   }
 
   @Post()
@@ -63,9 +66,10 @@ export class AttendanceController {
     @Body() createAttendanceDto: CreateAttendanceDto,
     @Req() req: Request,
   ): Promise<AttendanceRecord> {
+    // Aplicar aserción de tipo
     return this.attendanceService.upsertAttendance(
       createAttendanceDto,
-      req.user,
+      req.user as Partial<AdminUser>,
     );
   }
 
@@ -75,9 +79,10 @@ export class AttendanceController {
     @Body() bulkDto: BulkMarkAttendanceDto,
     @Req() req: Request,
   ): Promise<AttendanceRecord[]> {
+    // Aplicar aserción de tipo
     return this.attendanceService.bulkUpsertAttendance(
       bulkDto.records,
-      req.user,
+      req.user as Partial<AdminUser>,
     );
   }
 }

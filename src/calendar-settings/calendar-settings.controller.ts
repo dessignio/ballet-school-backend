@@ -14,6 +14,7 @@ import { CalendarSettings } from './calendar-settings.entity';
 import { UpdateCalendarSettingsDto } from './dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 @Controller('settings/calendar')
 @UseGuards(JwtAuthGuard)
@@ -29,7 +30,8 @@ export class CalendarSettingsController {
 
   @Get()
   async getSettings(@Req() req: Request): Promise<CalendarSettings> {
-    return this.settingsService.getSettings(req.user);
+    // Apply type assertion
+    return this.settingsService.getSettings(req.user as Partial<AdminUser>);
   }
 
   @Put()
@@ -37,6 +39,10 @@ export class CalendarSettingsController {
     @Body() updateDto: UpdateCalendarSettingsDto,
     @Req() req: Request,
   ): Promise<CalendarSettings> {
-    return this.settingsService.updateSettings(updateDto, req.user);
+    // Apply type assertion
+    return this.settingsService.updateSettings(
+      updateDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 }

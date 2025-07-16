@@ -14,6 +14,7 @@ import { GeneralSettings } from './general-settings.entity';
 import { UpdateGeneralSettingsDto } from './dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 @Controller('settings/general')
 @UseGuards(JwtAuthGuard)
@@ -29,7 +30,8 @@ export class GeneralSettingsController {
 
   @Get()
   async getSettings(@Req() req: Request): Promise<GeneralSettings> {
-    return this.settingsService.getSettings(req.user);
+    // Apply type assertion
+    return this.settingsService.getSettings(req.user as Partial<AdminUser>);
   }
 
   @Put()
@@ -37,6 +39,10 @@ export class GeneralSettingsController {
     @Body() updateDto: UpdateGeneralSettingsDto,
     @Req() req: Request,
   ): Promise<GeneralSettings> {
-    return this.settingsService.updateSettings(updateDto, req.user);
+    // Apply type assertion
+    return this.settingsService.updateSettings(
+      updateDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 }

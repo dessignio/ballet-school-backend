@@ -4,10 +4,12 @@ import { JwtService } from '@nestjs/jwt';
 import { ParentService } from 'src/parent/parent.service';
 import { StudentService } from 'src/student/student.service';
 
+// Paso 1: Actualizado el tipo
 export type ValidatedUser = {
   id: string;
   username: string;
   userType: 'parent' | 'student';
+  studioId: string;
 };
 
 @Injectable()
@@ -26,7 +28,13 @@ export class PortalAuthService {
     // 1. Check if it's a parent
     const parent = await this.parentService.findByUsername(username, studioId);
     if (parent && (await parent.validatePassword(pass))) {
-      return { id: parent.id, username: parent.username, userType: 'parent' };
+      // Paso 2: Retornar el studioId
+      return {
+        id: parent.id,
+        username: parent.username,
+        userType: 'parent',
+        studioId,
+      };
     }
 
     // 2. Check if it's a student
@@ -35,10 +43,12 @@ export class PortalAuthService {
       studioId,
     );
     if (student && student.username && (await student.validatePassword(pass))) {
+      // Paso 2: Retornar el studioId
       return {
         id: student.id,
-        username: student.username, // Ahora TypeScript sabe que es un string
+        username: student.username,
         userType: 'student',
+        studioId,
       };
     }
 
@@ -46,10 +56,12 @@ export class PortalAuthService {
   }
 
   async login(user: ValidatedUser) {
+    // Paso 3: Incluir studioId en el payload del token
     const payload = {
       username: user.username,
       sub: user.id,
       userType: user.userType,
+      studioId: user.studioId,
     };
     return {
       access_token: this.jwtService.sign(payload),

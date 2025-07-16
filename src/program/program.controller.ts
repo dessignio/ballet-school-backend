@@ -20,6 +20,7 @@ import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 @Controller('programs')
 @UseGuards(JwtAuthGuard)
@@ -36,17 +37,23 @@ export class ProgramController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createProgramDto: CreateProgramDto, @Req() req: Request) {
-    return this.programService.create(createProgramDto, req.user);
+    // Apply type assertion
+    return this.programService.create(
+      createProgramDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Get()
   findAll(@Req() req: Request) {
-    return this.programService.findAll(req.user);
+    // Apply type assertion
+    return this.programService.findAll(req.user as Partial<AdminUser>);
   }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    return this.programService.findOne(id, req.user);
+    // Apply type assertion
+    return this.programService.findOne(id, req.user as Partial<AdminUser>);
   }
 
   @Patch(':id')
@@ -55,12 +62,18 @@ export class ProgramController {
     @Body() updateProgramDto: UpdateProgramDto,
     @Req() req: Request,
   ) {
-    return this.programService.update(id, updateProgramDto, req.user);
+    // Apply type assertion
+    return this.programService.update(
+      id,
+      updateProgramDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    return this.programService.remove(id, req.user);
+    // Apply type assertion
+    return this.programService.remove(id, req.user as Partial<AdminUser>);
   }
 }

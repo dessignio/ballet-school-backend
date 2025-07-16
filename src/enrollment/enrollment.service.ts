@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 // src/enrollment/enrollment.service.ts
 import {
   Injectable,
@@ -271,19 +270,22 @@ export class EnrollmentService {
       }
     }
 
-    this.notificationGateway.broadcastDataUpdate(
-      'enrollments',
-      {
-        classOfferingId,
-      },
-      studioId,
-    );
-    this.notificationGateway.broadcastDataUpdate(
-      'classOfferings',
-      {
-        updatedId: classOfferingId,
-      },
-      studioId,
-    );
+    // CORRECCIÓN AQUÍ: Comprobar que user.studioId existe antes de usarlo
+    if (user.studioId) {
+      this.notificationGateway.broadcastDataUpdate(
+        'enrollments',
+        {
+          classOfferingId,
+        },
+        user.studioId,
+      );
+      this.notificationGateway.broadcastDataUpdate(
+        'classOfferings',
+        {
+          updatedId: classOfferingId,
+        },
+        user.studioId,
+      );
+    }
   }
 }

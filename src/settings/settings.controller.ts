@@ -14,6 +14,14 @@ import { UpdateStripeSettingsDto } from './dto/update-settings.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
 
+// Define a type for the JWT payload for type safety
+interface JwtPayload {
+  userId: string;
+  username: string;
+  roleId: string;
+  studioId: string;
+}
+
 @UseGuards(JwtAuthGuard) // Protect all routes in this controller
 @Controller('settings')
 export class SettingsController {
@@ -21,7 +29,8 @@ export class SettingsController {
 
   @Get('stripe')
   getStripeSettings(@Req() req: Request) {
-    const studioId = req.user.studioId;
+    // Apply type assertion before accessing property
+    const studioId = (req.user as JwtPayload).studioId;
     return this.settingsService.getStripeSettings(studioId);
   }
 
@@ -31,7 +40,8 @@ export class SettingsController {
     @Body() updateDto: UpdateStripeSettingsDto,
     @Req() req: Request,
   ) {
-    const studioId = req.user.studioId;
+    // Apply type assertion
+    const studioId = (req.user as JwtPayload).studioId;
     await this.settingsService.updateStripeSettings(updateDto, studioId);
     return {
       message: 'Stripe settings updated successfully.',

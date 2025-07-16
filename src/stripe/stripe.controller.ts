@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
 import {
@@ -44,9 +42,18 @@ import { Public } from 'src/auth/decorators/public.decorator';
 import * as https from 'https';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 interface RequestWithRawBody extends ExpressRequest {
   rawBody?: any;
+}
+
+// Define a type for the JWT payload for type safety
+interface JwtPayload {
+  userId: string;
+  username: string;
+  roleId: string;
+  studioId: string;
 }
 
 @Controller('stripe')
@@ -65,24 +72,24 @@ export class StripeController {
   @Post('create-audition-payment')
   createAuditionPaymentIntent(
     @Body() paymentDto: CreateAuditionPaymentDto,
-    @Req() req,
+    @Req() req: Request,
   ): Promise<{ clientSecret: string }> {
-    const studioId = req.user.studioId;
+    const studioId = (req.user as JwtPayload).studioId;
     return this.stripeService.createAuditionPaymentIntent(paymentDto, studioId);
   }
 
   @Get('metrics')
-  getFinancialMetrics(@Req() req): Promise<FinancialMetricsDto> {
-    const studioId = req.user.studioId;
+  getFinancialMetrics(@Req() req: Request): Promise<FinancialMetricsDto> {
+    const studioId = (req.user as JwtPayload).studioId;
     return this.stripeService.getFinancialMetrics(studioId);
   }
 
   @Post('subscriptions')
   createSubscription(
     @Body() createSubDto: CreateStripeSubscriptionDto,
-    @Req() req,
+    @Req() req: Request,
   ): Promise<StripeSubscriptionDetails> {
-    const studioId = req.user.studioId;
+    const studioId = (req.user as JwtPayload).studioId;
     return this.stripeService.createSubscription(createSubDto, studioId);
   }
 
@@ -90,9 +97,9 @@ export class StripeController {
   changeSubscriptionPlan(
     @Param('subscriptionId') subscriptionId: string,
     @Body() changePlanDto: ChangeStripeSubscriptionPlanDto,
-    @Req() req,
+    @Req() req: Request,
   ): Promise<StripeSubscriptionDetails> {
-    const studioId = req.user.studioId;
+    const studioId = (req.user as JwtPayload).studioId;
     return this.stripeService.updateSubscription(
       subscriptionId,
       changePlanDto.newPriceId,
@@ -105,9 +112,9 @@ export class StripeController {
   updatePaymentMethod(
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Body() updateDto: UpdatePaymentMethodDto,
-    @Req() req,
+    @Req() req: Request,
   ): Promise<{ success: boolean }> {
-    const studioId = req.user.studioId;
+    const studioId = (req.user as JwtPayload).studioId;
     return this.stripeService.updatePaymentMethod(
       studentId,
       updateDto.paymentMethodId,
@@ -123,9 +130,9 @@ export class StripeController {
   @Get('students/:studentId/stripe-subscription')
   async getStudentSubscription(
     @Param('studentId', ParseUUIDPipe) studentId: string,
-    @Req() req,
+    @Req() req: Request,
   ): Promise<StripeSubscriptionDetails> {
-    const studioId = req.user.studioId;
+    const studioId = (req.user as JwtPayload).studioId;
     const subscription = await this.stripeService.getStudentSubscription(
       studentId,
       studioId,
@@ -211,9 +218,9 @@ export class StripeController {
   @Get('payments')
   getStudentPayments(
     @Query('studentId', ParseUUIDPipe) studentId: string,
-    @Req() req,
+    @Req() req: Request,
   ) {
-    const studioId = req.user.studioId;
+    const studioId = (req.user as JwtPayload).studioId;
     return this.stripeService.getPaymentsForStudent(studentId, studioId);
   }
 
@@ -222,16 +229,21 @@ export class StripeController {
     @Query('studentId', ParseUUIDPipe) studentId: string,
     @Req() req: Request,
   ) {
-    return this.stripeService.getInvoicesForStudent(studentId, req.user);
+    // CORRECCIÓN: El servicio espera el objeto user, no solo el studioId.
+    // Usamos Partial<AdminUser> como en casos anteriores.
+    return this.stripeService.getInvoicesForStudent(
+      studentId,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Delete('subscriptions/:subscriptionId/cancel')
   async cancelSubscription(
     @Param('subscriptionId') subscriptionId: string,
     @Body('studentId', ParseUUIDPipe) studentId: string,
-    @Req() req,
+    @Req() req: Request,
   ): Promise<StripeSubscriptionDetails> {
-    const studioId = req.user.studioId;
+    const studioId = (req.user as JwtPayload).studioId;
     const subscription = await this.stripeService.cancelSubscription(
       studentId,
       subscriptionId,

@@ -23,6 +23,7 @@ import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Controller('enrollments')
 @UseGuards(JwtAuthGuard)
@@ -42,17 +43,21 @@ export class EnrollmentController {
     @Body() createEnrollmentDto: CreateEnrollmentDto,
     @Req() req: Request,
   ): Promise<MappedEnrollment> {
-    return this.enrollmentService.create(createEnrollmentDto, req.user);
+    return this.enrollmentService.create(
+      createEnrollmentDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Get()
+  // ORDEN DE PARÁMETROS CORREGIDO AQUÍ: @Req() va primero.
   findAll(
+    @Req() req: Request,
     @Query('classOfferingId') classOfferingId?: string,
     @Query('studentId') studentId?: string,
-    @Req() req: Request,
   ): Promise<MappedEnrollment[]> {
     return this.enrollmentService.findAllByCriteria(
-      req.user,
+      req.user as Partial<AdminUser>,
       classOfferingId,
       studentId,
     );
@@ -63,7 +68,7 @@ export class EnrollmentController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<MappedEnrollment> {
-    return this.enrollmentService.findOne(id, req.user);
+    return this.enrollmentService.findOne(id, req.user as Partial<AdminUser>);
   }
 
   @Patch(':id')
@@ -72,7 +77,11 @@ export class EnrollmentController {
     @Body() updateEnrollmentDto: UpdateEnrollmentDto,
     @Req() req: Request,
   ): Promise<MappedEnrollment> {
-    return this.enrollmentService.update(id, updateEnrollmentDto, req.user);
+    return this.enrollmentService.update(
+      id,
+      updateEnrollmentDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Delete('student/:studentId/class/:classOfferingId')
@@ -85,7 +94,7 @@ export class EnrollmentController {
     return this.enrollmentService.removeByStudentAndClass(
       studentId,
       classOfferingId,
-      req.user,
+      req.user as Partial<AdminUser>,
     );
   }
 }

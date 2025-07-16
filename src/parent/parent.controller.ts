@@ -19,6 +19,7 @@ import { ParentService, SafeParent } from './parent.service';
 import { CreateParentDto, UpdateParentDto } from './dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 @Controller('parents')
 @UseGuards(JwtAuthGuard)
@@ -37,12 +38,17 @@ export class ParentController {
     @Body() createParentDto: CreateParentDto,
     @Req() req: Request,
   ): Promise<SafeParent> {
-    return this.parentService.create(createParentDto, req.user);
+    // Apply type assertion
+    return this.parentService.create(
+      createParentDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Get()
   findAll(@Req() req: Request): Promise<SafeParent[]> {
-    return this.parentService.findAll(req.user);
+    // Apply type assertion
+    return this.parentService.findAll(req.user as Partial<AdminUser>);
   }
 
   @Get(':id')
@@ -50,7 +56,8 @@ export class ParentController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<SafeParent> {
-    return this.parentService.findOne(id, req.user);
+    // Apply type assertion
+    return this.parentService.findOne(id, req.user as Partial<AdminUser>);
   }
 
   @Patch(':id')
@@ -59,7 +66,12 @@ export class ParentController {
     @Body() updateParentDto: UpdateParentDto,
     @Req() req: Request,
   ): Promise<SafeParent> {
-    return this.parentService.update(id, updateParentDto, req.user);
+    // Apply type assertion
+    return this.parentService.update(
+      id,
+      updateParentDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Delete(':id')
@@ -68,6 +80,7 @@ export class ParentController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<void> {
-    return this.parentService.remove(id, req.user);
+    // Apply type assertion
+    return this.parentService.remove(id, req.user as Partial<AdminUser>);
   }
 }

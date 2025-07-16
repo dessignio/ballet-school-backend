@@ -1,3 +1,4 @@
+// src/prospect/prospect.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -14,6 +15,7 @@ import {
 import { StudentService, SafeStudent } from 'src/student/student.service';
 import { CreateStudentDto } from 'src/student/dto/create-student.dto';
 import { NotificationGateway } from 'src/notification/notification.gateway';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Importar AdminUser
 
 @Injectable()
 export class ProspectService {
@@ -83,7 +85,6 @@ export class ProspectService {
         `Prospect with ID "${id}" not found to update.`,
       );
     }
-    // Ensure the prospect belongs to the studio before saving
     if (prospect.studioId !== studioId) {
       throw new NotFoundException(
         `Prospect with ID "${id}" not found in this studio.`,
@@ -101,10 +102,12 @@ export class ProspectService {
     }
   }
 
+  // CORRECCIÓN 1: El método ahora acepta el objeto 'user'
   async approve(
     id: string,
     approveDto: ApproveProspectDto,
     studioId: string,
+    user: Partial<AdminUser>, // <--- Argumento añadido
   ): Promise<SafeStudent> {
     const prospect = await this.findOne(id, studioId);
 
@@ -122,7 +125,8 @@ export class ProspectService {
       studioId: studioId,
     };
 
-    const newStudent = await this.studentService.create(studentDto);
+    // CORRECCIÓN 2: Pasamos el objeto 'user' a studentService.create
+    const newStudent = await this.studentService.create(studentDto, user);
 
     await this.prospectRepository.remove(prospect);
 

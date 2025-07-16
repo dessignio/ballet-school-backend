@@ -19,6 +19,7 @@ import { CreateClassOfferingDto, UpdateClassOfferingDto } from './dto';
 import { ClassOffering } from './class-offering.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Importar AdminUser
 
 @Controller('class-offerings')
 @UseGuards(JwtAuthGuard)
@@ -30,12 +31,17 @@ export class ClassOfferingController {
     @Body() createClassOfferingDto: CreateClassOfferingDto,
     @Req() req: Request,
   ): Promise<ClassOffering> {
-    return this.classOfferingService.create(createClassOfferingDto, req.user);
+    // Aplicar aserción de tipo
+    return this.classOfferingService.create(
+      createClassOfferingDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Get()
   async findAll(@Req() req: Request): Promise<ClassOffering[]> {
-    return this.classOfferingService.findAll(req.user);
+    // Aplicar aserción de tipo
+    return this.classOfferingService.findAll(req.user as Partial<AdminUser>);
   }
 
   @Get(':id')
@@ -43,7 +49,11 @@ export class ClassOfferingController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<ClassOffering> {
-    const classOffering = await this.classOfferingService.findOne(id, req.user);
+    // Aplicar aserción de tipo
+    const classOffering = await this.classOfferingService.findOne(
+      id,
+      req.user as Partial<AdminUser>,
+    );
     if (!classOffering) {
       throw new NotFoundException(`ClassOffering with ID "${id}" not found`);
     }
@@ -56,10 +66,11 @@ export class ClassOfferingController {
     @Body() updateClassOfferingDto: UpdateClassOfferingDto,
     @Req() req: Request,
   ): Promise<ClassOffering> {
+    // Aplicar aserción de tipo
     const updatedClassOffering = await this.classOfferingService.update(
       id,
       updateClassOfferingDto,
-      req.user,
+      req.user as Partial<AdminUser>,
     );
     if (!updatedClassOffering) {
       throw new NotFoundException(
@@ -75,6 +86,7 @@ export class ClassOfferingController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<void> {
-    await this.classOfferingService.remove(id, req.user);
+    // Aplicar aserción de tipo
+    await this.classOfferingService.remove(id, req.user as Partial<AdminUser>);
   }
 }

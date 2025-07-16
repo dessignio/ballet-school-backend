@@ -18,6 +18,7 @@ import { CreateInstructorDto } from './dto/create-instructor.dto';
 import { UpdateInstructorDto } from './dto/update-instructor.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 @Controller('instructors')
 @UseGuards(JwtAuthGuard)
@@ -30,17 +31,23 @@ export class InstructorController {
     @Body() createInstructorDto: CreateInstructorDto,
     @Req() req: Request,
   ) {
-    return this.instructorService.create(createInstructorDto, req.user);
+    // Apply type assertion
+    return this.instructorService.create(
+      createInstructorDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Get()
   findAll(@Req() req: Request) {
-    return this.instructorService.findAll(req.user);
+    // Apply type assertion
+    return this.instructorService.findAll(req.user as Partial<AdminUser>);
   }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    return this.instructorService.findOne(id, req.user);
+    // Apply type assertion
+    return this.instructorService.findOne(id, req.user as Partial<AdminUser>);
   }
 
   @Patch(':id')
@@ -49,12 +56,18 @@ export class InstructorController {
     @Body() updateInstructorDto: UpdateInstructorDto,
     @Req() req: Request,
   ) {
-    return this.instructorService.update(id, updateInstructorDto, req.user);
+    // Apply type assertion
+    return this.instructorService.update(
+      id,
+      updateInstructorDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    return this.instructorService.remove(id, req.user);
+    // Apply type assertion
+    return this.instructorService.remove(id, req.user as Partial<AdminUser>);
   }
 }

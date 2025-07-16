@@ -20,6 +20,7 @@ import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 import { Announcement } from './announcement.entity';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
+import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Controller('announcements')
 @UseGuards(JwtAuthGuard)
@@ -31,12 +32,16 @@ export class AnnouncementController {
     @Body() createAnnouncementDto: CreateAnnouncementDto,
     @Req() req: Request,
   ): Promise<Announcement> {
-    return this.announcementService.create(createAnnouncementDto, req.user);
+    // Aserción de tipo para confirmar a TypeScript que req.user es válido
+    return this.announcementService.create(
+      createAnnouncementDto,
+      req.user as Partial<AdminUser>,
+    );
   }
 
   @Get()
   async findAll(@Req() req: Request): Promise<Announcement[]> {
-    return this.announcementService.findAll(req.user);
+    return this.announcementService.findAll(req.user as Partial<AdminUser>);
   }
 
   @Get(':id')
@@ -44,7 +49,10 @@ export class AnnouncementController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<Announcement> {
-    const announcement = await this.announcementService.findOne(id, req.user);
+    const announcement = await this.announcementService.findOne(
+      id,
+      req.user as Partial<AdminUser>,
+    );
     if (!announcement) {
       throw new NotFoundException(`Announcement with ID "${id}" not found`);
     }
@@ -60,7 +68,7 @@ export class AnnouncementController {
     const updatedAnnouncement = await this.announcementService.update(
       id,
       updateAnnouncementDto,
-      req.user,
+      req.user as Partial<AdminUser>,
     );
     if (!updatedAnnouncement) {
       throw new NotFoundException(
@@ -76,6 +84,6 @@ export class AnnouncementController {
     @Param('id', ParseUUIDPipe) id: string,
     @Req() req: Request,
   ): Promise<void> {
-    await this.announcementService.remove(id, req.user);
+    await this.announcementService.remove(id, req.user as Partial<AdminUser>);
   }
 }
