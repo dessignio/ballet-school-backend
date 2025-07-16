@@ -9,9 +9,11 @@ import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-p
 import { Payment } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
 import { NotificationModule } from 'src/notification/notification.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
+    SettingsModule,
     ConfigModule,
     TypeOrmModule.forFeature([
       Student,
