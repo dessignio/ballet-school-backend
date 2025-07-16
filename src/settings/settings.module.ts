@@ -5,11 +5,18 @@ import { SettingsController } from './settings.controller';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StripeSettings } from '../stripe/stripe-settings.entity';
+import { Studio } from '../studio/studio.entity'; // <-- 1. Importa la entidad Studio
 
 @Module({
-  imports: [ConfigModule, TypeOrmModule.forFeature([StripeSettings])],
+  imports: [
+    ConfigModule,
+    TypeOrmModule.forFeature([
+      Studio, // <-- 2. Añade Studio al array
+      StripeSettings,
+    ]),
+  ],
   controllers: [SettingsController],
   providers: [SettingsService],
-  exports: [SettingsService], // Export SettingsService if it's used by other modules
+  exports: [SettingsService],
 })
 export class SettingsModule {}
