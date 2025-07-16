@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/await-thenable */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   NotFoundException,
@@ -29,7 +27,7 @@ export class MembershipPlanService {
   ): Promise<MembershipPlanDefinitionEntity> {
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     const existingPlanByName = await this.planRepository.findOne({
@@ -89,12 +87,23 @@ export class MembershipPlanService {
     }
   }
 
-  async findAll(user: Partial<AdminUser>): Promise<MembershipPlanDefinitionEntity[]> {
-    return this.planRepository.find({ where: { studioId: user.studioId }, order: { name: 'ASC' } });
+  async findAll(
+    user: Partial<AdminUser>,
+  ): Promise<MembershipPlanDefinitionEntity[]> {
+    return this.planRepository.find({
+      where: { studioId: user.studioId },
+      order: { name: 'ASC' },
+    });
   }
 
-  async findOne(id: string, user: Partial<AdminUser>): Promise<MembershipPlanDefinitionEntity> {
-    const plan = await this.planRepository.findOneBy({ id, studioId: user.studioId });
+  async findOne(
+    id: string,
+    user: Partial<AdminUser>,
+  ): Promise<MembershipPlanDefinitionEntity> {
+    const plan = await this.planRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
     if (!plan) {
       throw new NotFoundException(`Membership plan with ID "${id}" not found.`);
     }
@@ -132,7 +141,10 @@ export class MembershipPlanService {
   }
 
   async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    const result = await this.planRepository.delete({ id, studioId: user.studioId });
+    const result = await this.planRepository.delete({
+      id,
+      studioId: user.studioId,
+    });
     if (result.affected === 0) {
       throw new NotFoundException(
         `Membership plan with ID "${id}" not found to delete.`,

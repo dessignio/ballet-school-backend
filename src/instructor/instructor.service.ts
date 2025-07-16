@@ -1,5 +1,9 @@
 // src/instructor/instructor.service.ts
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Instructor } from './instructor.entity';
@@ -14,21 +18,32 @@ export class InstructorService {
     private instructorRepository: Repository<Instructor>,
   ) {}
 
-  async create(createInstructorDto: CreateInstructorDto, user: Partial<AdminUser>): Promise<Instructor> {
+  async create(
+    createInstructorDto: CreateInstructorDto,
+    user: Partial<AdminUser>,
+  ): Promise<Instructor> {
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
-    const newInstructor = this.instructorRepository.create({ ...createInstructorDto, studioId });
+    const newInstructor = this.instructorRepository.create({
+      ...createInstructorDto,
+      studioId,
+    });
     return this.instructorRepository.save(newInstructor);
   }
 
   async findAll(user: Partial<AdminUser>): Promise<Instructor[]> {
-    return this.instructorRepository.find({ where: { studioId: user.studioId } });
+    return this.instructorRepository.find({
+      where: { studioId: user.studioId },
+    });
   }
 
   async findOne(id: string, user: Partial<AdminUser>): Promise<Instructor> {
-    const instructor = await this.instructorRepository.findOneBy({ id, studioId: user.studioId });
+    const instructor = await this.instructorRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
     if (!instructor) {
       throw new NotFoundException(`Instructor with ID "${id}" not found`);
     }
@@ -53,7 +68,10 @@ export class InstructorService {
   }
 
   async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    const result = await this.instructorRepository.delete({ id, studioId: user.studioId });
+    const result = await this.instructorRepository.delete({
+      id,
+      studioId: user.studioId,
+    });
     if (result.affected === 0) {
       throw new NotFoundException(
         `Instructor with ID "${id}" not found to delete`,

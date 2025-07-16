@@ -1,4 +1,5 @@
-'''/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unused-expressions */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // src/admin-user/admin-user.service.ts
@@ -220,4 +221,4 @@ export class AdminUserService {
     return { updatedCount: result.affected || 0 };
   }
 }
-''
+('');

@@ -23,7 +23,6 @@ export class Absence {
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
 
-
   @Column({ type: 'uuid' }) // Assuming student.id is a UUID
   studentId: string;
 

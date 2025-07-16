@@ -40,7 +40,10 @@ export class AnnouncementController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<Announcement> {
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<Announcement> {
     const announcement = await this.announcementService.findOne(id, req.user);
     if (!announcement) {
       throw new NotFoundException(`Announcement with ID "${id}" not found`);
@@ -69,7 +72,10 @@ export class AnnouncementController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<void> {
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<void> {
     await this.announcementService.remove(id, req.user);
   }
 }

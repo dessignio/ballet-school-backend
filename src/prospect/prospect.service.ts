@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   NotFoundException,
@@ -25,7 +24,10 @@ export class ProspectService {
     private readonly notificationGateway: NotificationGateway,
   ) {}
 
-  async create(createProspectDto: CreateProspectDto, studioId: string): Promise<Prospect> {
+  async create(
+    createProspectDto: CreateProspectDto,
+    studioId: string,
+  ): Promise<Prospect> {
     const existingProspect = await this.prospectRepository.findOne({
       where: { email: createProspectDto.email, studioId },
     });
@@ -36,7 +38,10 @@ export class ProspectService {
       );
     }
 
-    const newProspect = this.prospectRepository.create({ ...createProspectDto, studioId });
+    const newProspect = this.prospectRepository.create({
+      ...createProspectDto,
+      studioId,
+    });
     const savedProspect = await this.prospectRepository.save(newProspect);
 
     this.notificationGateway.sendNotificationToStudio(studioId, {

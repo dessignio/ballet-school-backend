@@ -31,10 +31,10 @@ export class ClassOfferingService {
   ): Promise<ClassOffering> {
     const { scheduledClassSlots: newSlotsData, ...restOfDto } =
       createClassOfferingDto;
-    
+
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     const existingOfferingByName = await this.classOfferingRepository.findOne({
@@ -174,7 +174,10 @@ export class ClassOfferingService {
   }
 
   async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    const result = await this.classOfferingRepository.delete({ id, studioId: user.studioId });
+    const result = await this.classOfferingRepository.delete({
+      id,
+      studioId: user.studioId,
+    });
     if (result.affected === 0) {
       throw new NotFoundException(
         `ClassOffering with ID "${id}" not found to delete`,
@@ -183,7 +186,11 @@ export class ClassOfferingService {
   }
 
   async incrementEnrolledCount(id: string, studioId: string): Promise<void> {
-    await this.classOfferingRepository.increment({ id, studioId }, 'enrolledCount', 1);
+    await this.classOfferingRepository.increment(
+      { id, studioId },
+      'enrolledCount',
+      1,
+    );
   }
 
   async decrementEnrolledCount(id: string, studioId: string): Promise<void> {

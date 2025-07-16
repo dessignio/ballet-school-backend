@@ -16,10 +16,8 @@ import {
   Req,
 } from '@nestjs/common';
 import { RoleService } from './role.service';
-import {
-  CreateRoleDto,
-  UpdateRoleDto,
-} from './dto';
+import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
 

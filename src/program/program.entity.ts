@@ -20,10 +20,9 @@ export class Program {
   @Column({ type: 'uuid', name: 'studio_id' })
   studioId: string;
 
-  @ManyToOne(() => Studio, studio => studio.programs)
+  @ManyToOne(() => Studio, (studio) => studio.programs)
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
-
 
   @Column({
     type: 'varchar',

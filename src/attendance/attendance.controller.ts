@@ -42,7 +42,11 @@ export class AttendanceController {
     if (!date) {
       throw new BadRequestException('Date parameter is required.');
     }
-    return this.attendanceService.findByClassAndDate(classOfferingId, date, req.user);
+    return this.attendanceService.findByClassAndDate(
+      classOfferingId,
+      date,
+      req.user,
+    );
   }
 
   @Get(':id')
@@ -59,7 +63,10 @@ export class AttendanceController {
     @Body() createAttendanceDto: CreateAttendanceDto,
     @Req() req: Request,
   ): Promise<AttendanceRecord> {
-    return this.attendanceService.upsertAttendance(createAttendanceDto, req.user);
+    return this.attendanceService.upsertAttendance(
+      createAttendanceDto,
+      req.user,
+    );
   }
 
   @Post('bulk')
@@ -68,6 +75,9 @@ export class AttendanceController {
     @Body() bulkDto: BulkMarkAttendanceDto,
     @Req() req: Request,
   ): Promise<AttendanceRecord[]> {
-    return this.attendanceService.bulkUpsertAttendance(bulkDto.records, req.user);
+    return this.attendanceService.bulkUpsertAttendance(
+      bulkDto.records,
+      req.user,
+    );
   }
 }

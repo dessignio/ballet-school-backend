@@ -26,7 +26,10 @@ export class InstructorController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createInstructorDto: CreateInstructorDto, @Req() req: Request) {
+  create(
+    @Body() createInstructorDto: CreateInstructorDto,
+    @Req() req: Request,
+  ) {
     return this.instructorService.create(createInstructorDto, req.user);
   }
 

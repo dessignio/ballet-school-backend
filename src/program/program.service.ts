@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // src/program/program.service.ts
 import {
   Injectable,
@@ -20,11 +19,14 @@ export class ProgramService {
     private programRepository: Repository<Program>,
   ) {}
 
-  async create(createProgramDto: CreateProgramDto, user: Partial<AdminUser>): Promise<Program> {
+  async create(
+    createProgramDto: CreateProgramDto,
+    user: Partial<AdminUser>,
+  ): Promise<Program> {
     const { name, levels } = createProgramDto;
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     const existingProgram = await this.programRepository.findOne({
@@ -36,7 +38,10 @@ export class ProgramService {
       );
     }
 
-    const program = this.programRepository.create({ ...createProgramDto, studioId });
+    const program = this.programRepository.create({
+      ...createProgramDto,
+      studioId,
+    });
 
     if (name === 'Dancers') {
       if (!levels || levels.length === 0) {
@@ -53,11 +58,17 @@ export class ProgramService {
   }
 
   async findAll(user: Partial<AdminUser>): Promise<Program[]> {
-    return this.programRepository.find({ where: { studioId: user.studioId }, order: { name: 'ASC' } });
+    return this.programRepository.find({
+      where: { studioId: user.studioId },
+      order: { name: 'ASC' },
+    });
   }
 
   async findOne(id: string, user: Partial<AdminUser>): Promise<Program> {
-    const program = await this.programRepository.findOneBy({ id, studioId: user.studioId });
+    const program = await this.programRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
     if (!program) {
       throw new NotFoundException(`Program with ID "${id}" not found`);
     }
@@ -69,7 +80,10 @@ export class ProgramService {
     updateProgramDto: UpdateProgramDto,
     user: Partial<AdminUser>,
   ): Promise<Program> {
-    const program = await this.programRepository.findOneBy({ id, studioId: user.studioId });
+    const program = await this.programRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
     if (!program) {
       throw new NotFoundException(
         `Program with ID "${id}" not found to update.`,
@@ -97,7 +111,7 @@ export class ProgramService {
         `Program with ID "${id}" could not be preloaded for update.`,
       );
     }
-    
+
     program.ageRange =
       updatedProgramPartial.ageRange !== undefined
         ? updatedProgramPartial.ageRange
@@ -111,7 +125,10 @@ export class ProgramService {
   }
 
   async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    const result = await this.programRepository.delete({ id, studioId: user.studioId });
+    const result = await this.programRepository.delete({
+      id,
+      studioId: user.studioId,
+    });
     if (result.affected === 0) {
       throw new NotFoundException(
         `Program with ID "${id}" not found to delete`,

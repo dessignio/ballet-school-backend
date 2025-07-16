@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // src/enrollment/enrollment.controller.ts
 import {
   Controller,
@@ -50,11 +51,18 @@ export class EnrollmentController {
     @Query('studentId') studentId?: string,
     @Req() req: Request,
   ): Promise<MappedEnrollment[]> {
-    return this.enrollmentService.findAllByCriteria(req.user, classOfferingId, studentId);
+    return this.enrollmentService.findAllByCriteria(
+      req.user,
+      classOfferingId,
+      studentId,
+    );
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<MappedEnrollment> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<MappedEnrollment> {
     return this.enrollmentService.findOne(id, req.user);
   }
 

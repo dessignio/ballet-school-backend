@@ -25,7 +25,6 @@ export class Announcement {
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
 
-
   @Column({ type: 'varchar', length: 255 })
   title: string;
 

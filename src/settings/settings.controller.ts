@@ -1,5 +1,14 @@
 // backend/settings/settings.controller.ts
-import { Controller, Get, Post, Body, UseGuards, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  Req,
+} from '@nestjs/common';
 import { SettingsService } from './settings.service';
 import { UpdateStripeSettingsDto } from './dto/update-settings.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -18,7 +27,10 @@ export class SettingsController {
 
   @Post('stripe')
   @HttpCode(HttpStatus.OK)
-  async updateStripeSettings(@Body() updateDto: UpdateStripeSettingsDto, @Req() req: Request) {
+  async updateStripeSettings(
+    @Body() updateDto: UpdateStripeSettingsDto,
+    @Req() req: Request,
+  ) {
     const studioId = req.user.studioId;
     await this.settingsService.updateStripeSettings(updateDto, studioId);
     return {

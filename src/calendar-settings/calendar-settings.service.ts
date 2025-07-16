@@ -16,7 +16,7 @@ export class CalendarSettingsService {
   async getSettings(user: Partial<AdminUser>): Promise<CalendarSettings> {
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     let settings = await this.settingsRepository.findOneBy({

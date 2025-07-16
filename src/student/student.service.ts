@@ -63,7 +63,10 @@ export class StudentService {
     return renewalDate.toISOString().split('T')[0];
   }
 
-  async findByUsername(username: string, studioId: string): Promise<Student | null> {
+  async findByUsername(
+    username: string,
+    studioId: string,
+  ): Promise<Student | null> {
     return this.studentRepository
       .createQueryBuilder('student')
       .addSelect('student.password')
@@ -74,13 +77,16 @@ export class StudentService {
 
   // --- MÉTODOS CRUD ---
 
-  async create(createStudentDto: CreateStudentDto, user: Partial<AdminUser>): Promise<SafeStudent> {
+  async create(
+    createStudentDto: CreateStudentDto,
+    user: Partial<AdminUser>,
+  ): Promise<SafeStudent> {
     const { email, username, membershipPlanId, membershipStartDate, parentId } =
       createStudentDto;
 
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     // Verificación de conflictos
@@ -89,7 +95,9 @@ export class StudentService {
         where: { email, studioId },
       });
       if (existingByEmail) {
-        throw new ConflictException(`Email "${email}" already exists in this studio.`);
+        throw new ConflictException(
+          `Email "${email}" already exists in this studio.`,
+        );
       }
     }
     if (username) {
@@ -97,14 +105,22 @@ export class StudentService {
         where: { username, studioId },
       });
       if (existingByUsername) {
-        throw new ConflictException(`Username "${username}" already exists in this studio.`);
+        throw new ConflictException(
+          `Username "${username}" already exists in this studio.`,
+        );
       }
     }
 
-    const newStudent = this.studentRepository.create({ ...createStudentDto, studioId });
+    const newStudent = this.studentRepository.create({
+      ...createStudentDto,
+      studioId,
+    });
 
     if (parentId) {
-      const parent = await this.parentRepository.findOneBy({ id: parentId, studioId });
+      const parent = await this.parentRepository.findOneBy({
+        id: parentId,
+        studioId,
+      });
       if (!parent) {
         throw new BadRequestException(
           `Parent with ID "${parentId}" not found in this studio.`,
@@ -136,9 +152,13 @@ export class StudentService {
 
     try {
       const savedStudent = await this.studentRepository.save(newStudent);
-      this.notificationGateway.broadcastDataUpdate('students', {
-        createdId: savedStudent.id,
-      }, studioId);
+      this.notificationGateway.broadcastDataUpdate(
+        'students',
+        {
+          createdId: savedStudent.id,
+        },
+        studioId,
+      );
       return this.transformToSafeStudent(savedStudent);
     } catch (error) {
       if ((error as { code: string }).code === '23505') {
@@ -175,7 +195,10 @@ export class StudentService {
     user: Partial<AdminUser>,
   ): Promise<SafeStudent> {
     const studioId = user.studioId;
-    const existingStudent = await this.studentRepository.findOneBy({ id, studioId });
+    const existingStudent = await this.studentRepository.findOneBy({
+      id,
+      studioId,
+    });
     if (!existingStudent) {
       throw new NotFoundException(`Student with ID "${id}" not found.`);
     }
@@ -198,7 +221,10 @@ export class StudentService {
       if (parentId === null) {
         studentToUpdate.parentName = undefined;
       } else {
-        const parent = await this.parentRepository.findOneBy({ id: parentId, studioId });
+        const parent = await this.parentRepository.findOneBy({
+          id: parentId,
+          studioId,
+        });
         if (!parent) {
           throw new BadRequestException(
             `Parent with ID "${parentId}" not found in this studio.`,
@@ -274,9 +300,13 @@ export class StudentService {
         });
       }
 
-      this.notificationGateway.broadcastDataUpdate('students', {
-        updatedId: savedStudent.id,
-      }, studioId);
+      this.notificationGateway.broadcastDataUpdate(
+        'students',
+        {
+          updatedId: savedStudent.id,
+        },
+        studioId,
+      );
 
       return this.transformToSafeStudent(savedStudent);
     } catch (error) {
@@ -291,9 +321,14 @@ export class StudentService {
   }
 
   async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    const student = await this.studentRepository.findOneBy({ id, studioId: user.studioId });
+    const student = await this.studentRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
     if (!student) {
-        throw new NotFoundException(`Student with ID "${id}" not found in this studio.`);
+      throw new NotFoundException(
+        `Student with ID "${id}" not found in this studio.`,
+      );
     }
 
     const enrollments = await this.enrollmentRepository.find({
@@ -311,7 +346,10 @@ export class StudentService {
       }
     }
 
-    const result = await this.studentRepository.delete({ id, studioId: user.studioId });
+    const result = await this.studentRepository.delete({
+      id,
+      studioId: user.studioId,
+    });
 
     if (result.affected === 0) {
       throw new NotFoundException(
@@ -319,12 +357,20 @@ export class StudentService {
       );
     }
 
-    this.notificationGateway.broadcastDataUpdate('students', { deletedId: id }, studioId);
+    this.notificationGateway.broadcastDataUpdate(
+      'students',
+      { deletedId: id },
+      studioId,
+    );
     if (enrollments.length > 0) {
-      this.notificationGateway.broadcastDataUpdate('classOfferings', {
-        type: 'bulk_update',
-        ids: enrollments.map((e) => e.classOfferingId),
-      }, studioId);
+      this.notificationGateway.broadcastDataUpdate(
+        'classOfferings',
+        {
+          type: 'bulk_update',
+          ids: enrollments.map((e) => e.classOfferingId),
+        },
+        studioId,
+      );
     }
   }
 }

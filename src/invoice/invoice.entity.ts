@@ -27,7 +27,6 @@ export class Invoice {
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
 
-
   @Column({ type: 'uuid' })
   studentId: string;
 

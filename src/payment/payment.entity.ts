@@ -35,7 +35,6 @@ export class Payment {
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
 
-
   @Column({ type: 'uuid' })
   studentId: string;
 

@@ -71,7 +71,10 @@ export class ClassOfferingController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<void> {
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<void> {
     await this.classOfferingService.remove(id, req.user);
   }
 }

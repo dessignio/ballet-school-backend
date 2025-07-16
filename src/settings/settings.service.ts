@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -20,7 +21,9 @@ export class SettingsService {
   ) {}
 
   async getStripeSettings(studioId: string) {
-    const settings = await this.stripeSettingsRepository.findOneBy({ studioId });
+    const settings = await this.stripeSettingsRepository.findOneBy({
+      studioId,
+    });
     if (!settings) {
       // Return default or throw an error if settings are expected to exist
       return {
@@ -40,8 +43,13 @@ export class SettingsService {
     };
   }
 
-  async updateStripeSettings(dto: UpdateStripeSettingsDto, studioId: string): Promise<void> {
-    this.logger.log(`Attempting to update Stripe settings for studio ${studioId}`);
+  async updateStripeSettings(
+    dto: UpdateStripeSettingsDto,
+    studioId: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Attempting to update Stripe settings for studio ${studioId}`,
+    );
     let settings = await this.stripeSettingsRepository.findOneBy({ studioId });
 
     if (!settings) {
@@ -49,13 +57,19 @@ export class SettingsService {
     }
 
     // Update fields from DTO
-    if (dto.enrollmentProductId !== undefined) settings.enrollmentProductId = dto.enrollmentProductId;
-    if (dto.enrollmentPriceId !== undefined) settings.enrollmentPriceId = dto.enrollmentPriceId;
-    if (dto.auditionProductId !== undefined) settings.auditionProductId = dto.auditionProductId;
-    if (dto.auditionPriceId !== undefined) settings.auditionPriceId = dto.auditionPriceId;
+    if (dto.enrollmentProductId !== undefined)
+      settings.enrollmentProductId = dto.enrollmentProductId;
+    if (dto.enrollmentPriceId !== undefined)
+      settings.enrollmentPriceId = dto.enrollmentPriceId;
+    if (dto.auditionProductId !== undefined)
+      settings.auditionProductId = dto.auditionProductId;
+    if (dto.auditionPriceId !== undefined)
+      settings.auditionPriceId = dto.auditionPriceId;
 
     await this.stripeSettingsRepository.save(settings);
-    this.logger.log(`Stripe settings for studio ${studioId} updated successfully.`);
+    this.logger.log(
+      `Stripe settings for studio ${studioId} updated successfully.`,
+    );
 
     // No need to restart server for database changes
   }
@@ -70,7 +84,9 @@ export class SettingsService {
       return;
     }
 
-    this.logger.log(`Settings changed. Triggering restart for PM2 process: ${pm2ProcessName}...`);
+    this.logger.log(
+      `Settings changed. Triggering restart for PM2 process: ${pm2ProcessName}...`,
+    );
 
     exec(`pm2 restart ${pm2ProcessName}`, (error, stdout, stderr) => {
       if (error) {

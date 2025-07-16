@@ -37,7 +37,10 @@ export class StudentController {
   constructor(private readonly studentService: StudentService) {}
 
   @Post()
-  create(@Body() createStudentDto: CreateStudentDto, @Req() req: Request): Promise<SafeStudent> {
+  create(
+    @Body() createStudentDto: CreateStudentDto,
+    @Req() req: Request,
+  ): Promise<SafeStudent> {
     return this.studentService.create(createStudentDto, req.user);
   }
 
@@ -47,7 +50,10 @@ export class StudentController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<SafeStudent> {
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<SafeStudent> {
     const student = await this.studentService.findOne(id, req.user);
     return student;
   }
@@ -68,7 +74,10 @@ export class StudentController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<void> {
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<void> {
     await this.studentService.remove(id, req.user);
   }
 }

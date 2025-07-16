@@ -1,4 +1,3 @@
-
 // src/general-settings/dto/update-general-settings.dto.ts
 import {
   IsString,

@@ -33,7 +33,10 @@ export class ParentController {
   constructor(private readonly parentService: ParentService) {}
 
   @Post()
-  create(@Body() createParentDto: CreateParentDto, @Req() req: Request): Promise<SafeParent> {
+  create(
+    @Body() createParentDto: CreateParentDto,
+    @Req() req: Request,
+  ): Promise<SafeParent> {
     return this.parentService.create(createParentDto, req.user);
   }
 
@@ -43,7 +46,10 @@ export class ParentController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<SafeParent> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<SafeParent> {
     return this.parentService.findOne(id, req.user);
   }
 
@@ -58,7 +64,10 @@ export class ParentController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<void> {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<void> {
     return this.parentService.remove(id, req.user);
   }
 }

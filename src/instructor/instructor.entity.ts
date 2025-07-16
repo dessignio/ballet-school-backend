@@ -29,10 +29,9 @@ export class Instructor {
   @Column({ type: 'uuid', name: 'studio_id' })
   studioId: string;
 
-  @ManyToOne(() => Studio, studio => studio.instructors)
+  @ManyToOne(() => Studio, (studio) => studio.instructors)
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
-
 
   @Column({ length: 100 })
   firstName: string;

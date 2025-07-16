@@ -23,10 +23,9 @@ export class ClassOffering {
   @Column({ type: 'uuid', name: 'studio_id' })
   studioId: string;
 
-  @ManyToOne(() => Studio, studio => studio.classOfferings)
+  @ManyToOne(() => Studio, (studio) => studio.classOfferings)
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
-
 
   @Column({ length: 255 })
   name: string;

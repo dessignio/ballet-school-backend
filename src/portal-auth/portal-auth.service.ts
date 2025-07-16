@@ -30,7 +30,10 @@ export class PortalAuthService {
     }
 
     // 2. Check if it's a student
-    const student = await this.studentService.findByUsername(username, studioId);
+    const student = await this.studentService.findByUsername(
+      username,
+      studioId,
+    );
     if (student && student.username && (await student.validatePassword(pass))) {
       return {
         id: student.id,

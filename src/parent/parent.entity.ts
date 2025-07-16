@@ -35,7 +35,6 @@ export class Parent {
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
 
-
   @Column({ type: 'varchar', length: 100 })
   firstName: string;
 

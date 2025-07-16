@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 // src/enrollment/enrollment.service.ts
 import {
   Injectable,
@@ -73,7 +73,7 @@ export class EnrollmentService {
     const { studentId, classOfferingId, status } = createEnrollmentDto;
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     const existingEnrollment = await this.enrollmentRepository.findOne({
@@ -127,7 +127,10 @@ export class EnrollmentService {
         });
       }
 
-      const student = await this.studentRepository.findOneBy({ id: studentId, studioId });
+      const student = await this.studentRepository.findOneBy({
+        id: studentId,
+        studioId,
+      });
       if (student) {
         if (!Array.isArray(student.enrolledClasses)) {
           student.enrolledClasses = [];
@@ -143,12 +146,20 @@ export class EnrollmentService {
       }
     }
 
-    this.notificationGateway.broadcastDataUpdate('enrollments', {
-      classOfferingId,
-    }, studioId);
-    this.notificationGateway.broadcastDataUpdate('classOfferings', {
-      updatedId: classOfferingId,
-    }, studioId);
+    this.notificationGateway.broadcastDataUpdate(
+      'enrollments',
+      {
+        classOfferingId,
+      },
+      studioId,
+    );
+    this.notificationGateway.broadcastDataUpdate(
+      'classOfferings',
+      {
+        updatedId: classOfferingId,
+      },
+      studioId,
+    );
 
     return this.mapEnrollmentToDto(savedEnrollment);
   }
@@ -181,7 +192,10 @@ export class EnrollmentService {
     return Promise.all(enrollments.map((e) => this.mapEnrollmentToDto(e)));
   }
 
-  async findOne(id: string, user: Partial<AdminUser>): Promise<MappedEnrollment> {
+  async findOne(
+    id: string,
+    user: Partial<AdminUser>,
+  ): Promise<MappedEnrollment> {
     const enrollment = await this.enrollmentRepository.findOne({
       where: { id, studioId: user.studioId },
       relations: ['student', 'classOffering'],
@@ -197,7 +211,10 @@ export class EnrollmentService {
     updateEnrollmentDto: UpdateEnrollmentDto,
     user: Partial<AdminUser>,
   ): Promise<MappedEnrollment> {
-    const enrollment = await this.enrollmentRepository.findOneBy({ id, studioId: user.studioId });
+    const enrollment = await this.enrollmentRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
     if (!enrollment) {
       throw new NotFoundException(
         `Enrollment with ID "${id}" not found to update.`,
@@ -236,7 +253,10 @@ export class EnrollmentService {
         await this.classOfferingRepository.save(classOffering);
       }
 
-      const student = await this.studentRepository.findOneBy({ id: studentId, studioId: user.studioId });
+      const student = await this.studentRepository.findOneBy({
+        id: studentId,
+        studioId: user.studioId,
+      });
       if (student) {
         if (Array.isArray(student.enrolledClasses)) {
           student.enrolledClasses = student.enrolledClasses.filter(
@@ -251,11 +271,19 @@ export class EnrollmentService {
       }
     }
 
-    this.notificationGateway.broadcastDataUpdate('enrollments', {
-      classOfferingId,
-    }, studioId);
-    this.notificationGateway.broadcastDataUpdate('classOfferings', {
-      updatedId: classOfferingId,
-    }, studioId);
+    this.notificationGateway.broadcastDataUpdate(
+      'enrollments',
+      {
+        classOfferingId,
+      },
+      studioId,
+    );
+    this.notificationGateway.broadcastDataUpdate(
+      'classOfferings',
+      {
+        updatedId: classOfferingId,
+      },
+      studioId,
+    );
   }
 }

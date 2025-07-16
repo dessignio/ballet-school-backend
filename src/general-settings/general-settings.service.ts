@@ -16,7 +16,7 @@ export class GeneralSettingsService {
   async getSettings(user: Partial<AdminUser>): Promise<GeneralSettings> {
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     let settings = await this.settingsRepository.findOneBy({
@@ -44,7 +44,7 @@ export class GeneralSettingsService {
   ): Promise<GeneralSettings> {
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     const settings = await this.settingsRepository.findOneBy({

@@ -1,5 +1,9 @@
 // src/attendance/attendance.service.ts
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { AttendanceRecord } from './attendance.entity';
@@ -43,10 +47,13 @@ export class AttendanceService {
     });
   }
 
-  async upsertAttendance(dto: CreateAttendanceDto, user: Partial<AdminUser>): Promise<AttendanceRecord> {
+  async upsertAttendance(
+    dto: CreateAttendanceDto,
+    user: Partial<AdminUser>,
+  ): Promise<AttendanceRecord> {
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
 
     const student = await this.studentRepository.findOneBy({
@@ -107,7 +114,10 @@ export class AttendanceService {
     return results;
   }
 
-  async findOne(id: string, user: Partial<AdminUser>): Promise<AttendanceRecord> {
+  async findOne(
+    id: string,
+    user: Partial<AdminUser>,
+  ): Promise<AttendanceRecord> {
     const record = await this.attendanceRepository.findOne({
       where: { id, studioId: user.studioId },
       relations: ['student', 'classOffering', 'absence'],

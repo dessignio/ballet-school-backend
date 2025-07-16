@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
+
 import {
   Controller,
   Post,
@@ -125,8 +126,10 @@ export class StripeController {
     @Req() req,
   ): Promise<StripeSubscriptionDetails> {
     const studioId = req.user.studioId;
-    const subscription =
-      await this.stripeService.getStudentSubscription(studentId, studioId);
+    const subscription = await this.stripeService.getStudentSubscription(
+      studentId,
+      studioId,
+    );
 
     if (!subscription) {
       throw new NotFoundException(
@@ -206,13 +209,19 @@ export class StripeController {
   }
 
   @Get('payments')
-  getStudentPayments(@Query('studentId', ParseUUIDPipe) studentId: string, @Req() req) {
+  getStudentPayments(
+    @Query('studentId', ParseUUIDPipe) studentId: string,
+    @Req() req,
+  ) {
     const studioId = req.user.studioId;
     return this.stripeService.getPaymentsForStudent(studentId, studioId);
   }
 
   @Get('invoices')
-  getStudentInvoices(@Query('studentId', ParseUUIDPipe) studentId: string, @Req() req: Request) {
+  getStudentInvoices(
+    @Query('studentId', ParseUUIDPipe) studentId: string,
+    @Req() req: Request,
+  ) {
     return this.stripeService.getInvoicesForStudent(studentId, req.user);
   }
 

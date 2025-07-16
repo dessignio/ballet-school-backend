@@ -14,6 +14,7 @@ import {
   BeforeUpdate,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { AdminUserStatus } from './types/admin-user-status.type';
@@ -29,10 +30,9 @@ export class AdminUser {
   @Column({ type: 'uuid', name: 'studio_id' })
   studioId: string;
 
-  @ManyToOne(() => Studio, studio => studio.adminUsers)
+  @ManyToOne(() => Studio, (studio) => studio.adminUsers)
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
-
 
   @Column({ length: 100 })
   username: string;

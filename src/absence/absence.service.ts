@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 // ballet-school-backend/src/absence/absence.service.ts
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -15,12 +17,18 @@ export class AbsenceService {
     private readonly notificationGateway: NotificationGateway,
   ) {}
 
-  async create(createAbsenceDto: CreateAbsenceDto, user: Partial<AdminUser>): Promise<Absence> {
+  async create(
+    createAbsenceDto: CreateAbsenceDto,
+    user: Partial<AdminUser>,
+  ): Promise<Absence> {
     const studioId = user.studioId;
     if (!studioId) {
-        throw new BadRequestException('User is not associated with a studio.');
+      throw new BadRequestException('User is not associated with a studio.');
     }
-    const newAbsence = this.absenceRepository.create({ ...createAbsenceDto, studioId });
+    const newAbsence = this.absenceRepository.create({
+      ...createAbsenceDto,
+      studioId,
+    });
     const savedAbsence = await this.absenceRepository.save(newAbsence);
 
     this.notificationGateway.sendNotificationToStudio(studioId, {
@@ -34,10 +42,17 @@ export class AbsenceService {
   }
 
   async findAll(user: Partial<AdminUser>): Promise<Absence[]> {
-    return this.absenceRepository.find({ where: { studioId: user.studioId }, order: { notificationDate: 'DESC' } });
+    return this.absenceRepository.find({
+      where: { studioId: user.studioId },
+      order: { notificationDate: 'DESC' },
+    });
   }
 
-  async findAllByStudent(studentId: string, user: Partial<AdminUser>, date?: string): Promise<Absence[]> {
+  async findAllByStudent(
+    studentId: string,
+    user: Partial<AdminUser>,
+    date?: string,
+  ): Promise<Absence[]> {
     const whereClause: any = { studentId, studioId: user.studioId };
     if (date) {
       whereClause.classDateTime = Like(`${date}%`);
@@ -49,7 +64,10 @@ export class AbsenceService {
   }
 
   async findOne(id: string, user: Partial<AdminUser>): Promise<Absence | null> {
-    const absence = await this.absenceRepository.findOneBy({ id, studioId: user.studioId });
+    const absence = await this.absenceRepository.findOneBy({
+      id,
+      studioId: user.studioId,
+    });
     return absence;
   }
 

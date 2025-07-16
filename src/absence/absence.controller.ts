@@ -27,7 +27,10 @@ export class AbsenceController {
   constructor(private readonly absenceService: AbsenceService) {}
 
   @Post()
-  async create(@Body() createAbsenceDto: CreateAbsenceDto, @Req() req: Request): Promise<Absence> {
+  async create(
+    @Body() createAbsenceDto: CreateAbsenceDto,
+    @Req() req: Request,
+  ): Promise<Absence> {
     return this.absenceService.create(createAbsenceDto, req.user);
   }
 
@@ -46,7 +49,10 @@ export class AbsenceController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<Absence> {
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<Absence> {
     const absence = await this.absenceService.findOne(id, req.user);
     if (!absence) {
       throw new NotFoundException(`Absence with ID "${id}" not found`);
@@ -75,7 +81,10 @@ export class AbsenceController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request): Promise<void> {
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+  ): Promise<void> {
     await this.absenceService.remove(id, req.user);
   }
 }

@@ -1,5 +1,12 @@
 // src/general-settings/general-settings.entity.ts
-import { Entity, Column, PrimaryColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryColumn,
+  UpdateDateColumn,
+  OneToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Studio } from '../studio/studio.entity';
 
 // Define interfaces for JSONB columns to ensure type safety
@@ -25,7 +32,6 @@ export class GeneralSettings {
   @OneToOne(() => Studio)
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
-
 
   @Column({ type: 'varchar', length: 255 })
   academyName: string;

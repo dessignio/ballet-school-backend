@@ -1,5 +1,14 @@
 // backend/studio/studio.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, OneToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  OneToOne,
+  JoinColumn,
+} from 'typeorm';
 import { AdminUser } from '../admin-user/admin-user.entity';
 import { Student } from '../student/student.entity';
 import { Instructor } from '../instructor/instructor.entity';
@@ -26,43 +35,48 @@ export class Studio {
   @JoinColumn({ name: 'owner_id' })
   owner: AdminUser;
 
-  @Column({ name: 'stripe_account_id', type: 'varchar', nullable: true, unique: true })
+  @Column({
+    name: 'stripe_account_id',
+    type: 'varchar',
+    nullable: true,
+    unique: true,
+  })
   stripeAccountId: string | null;
 
   @Column({ default: true })
   isActive: boolean;
 
-  @OneToMany(() => AdminUser, adminUser => adminUser.studio)
+  @OneToMany(() => AdminUser, (adminUser) => adminUser.studio)
   adminUsers: AdminUser[];
 
-  @OneToMany(() => Student, student => student.studio)
+  @OneToMany(() => Student, (student) => student.studio)
   students: Student[];
 
-  @OneToMany(() => Instructor, instructor => instructor.studio)
+  @OneToMany(() => Instructor, (instructor) => instructor.studio)
   instructors: Instructor[];
 
-  @OneToMany(() => Program, program => program.studio)
+  @OneToMany(() => Program, (program) => program.studio)
   programs: Program[];
 
-  @OneToMany(() => ClassOffering, classOffering => classOffering.studio)
+  @OneToMany(() => ClassOffering, (classOffering) => classOffering.studio)
   classOfferings: ClassOffering[];
 
-  @OneToMany(() => MembershipPlanDefinitionEntity, plan => plan.studio)
+  @OneToMany(() => MembershipPlanDefinitionEntity, (plan) => plan.studio)
   membershipPlans: MembershipPlanDefinitionEntity[];
 
-  @OneToMany(() => Prospect, prospect => prospect.studio)
+  @OneToMany(() => Prospect, (prospect) => prospect.studio)
   prospects: Prospect[];
 
-  @OneToMany(() => Role, role => role.studio)
+  @OneToMany(() => Role, (role) => role.studio)
   roles: Role[];
 
-  @OneToMany(() => Payment, payment => payment.studio)
+  @OneToMany(() => Payment, (payment) => payment.studio)
   payments: Payment[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @OneToOne(() => StripeSettings, stripeSettings => stripeSettings.studio)
+  @OneToOne(() => StripeSettings, (stripeSettings) => stripeSettings.studio)
   stripeSettings: StripeSettings;
 
   @UpdateDateColumn({ name: 'updated_at' })

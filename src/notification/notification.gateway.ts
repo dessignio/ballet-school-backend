@@ -32,7 +32,8 @@ export class NotificationGateway
 
   private logger: Logger = new Logger('NotificationGateway');
   // Map<socketId, { userId: string, studioId: string }>
-  private clients: Map<string, { userId: string; studioId: string }> = new Map();
+  private clients: Map<string, { userId: string; studioId: string }> =
+    new Map();
 
   afterInit(server: Server) {
     this.logger.log('NotificationGateway Initialized');
@@ -48,19 +49,28 @@ export class NotificationGateway
     for (const [socketId, clientInfo] of this.clients.entries()) {
       if (socketId === client.id) {
         this.clients.delete(socketId);
-        this.logger.log(`User ${clientInfo.userId} (studio ${clientInfo.studioId}) unregistered`);
+        this.logger.log(
+          `User ${clientInfo.userId} (studio ${clientInfo.studioId}) unregistered`,
+        );
         break;
       }
     }
   }
 
   @SubscribeMessage('register')
-  handleRegister(client: Socket, payload: { userId: string; studioId: string }): void {
+  handleRegister(
+    client: Socket,
+    payload: { userId: string; studioId: string },
+  ): void {
     if (!payload || !payload.userId || !payload.studioId) {
-      this.logger.warn(`Client ${client.id} tried to register with invalid payload.`);
+      this.logger.warn(
+        `Client ${client.id} tried to register with invalid payload.`,
+      );
       return;
     }
-    this.logger.log(`Client registered: ${client.id} for user ${payload.userId} in studio ${payload.studioId}`);
+    this.logger.log(
+      `Client registered: ${client.id} for user ${payload.userId} in studio ${payload.studioId}`,
+    );
     this.clients.set(client.id, payload);
   }
 
@@ -86,7 +96,10 @@ export class NotificationGateway
     }
   }
 
-  sendNotificationToStudio(studioId: string, payload: ServerNotificationPayload) {
+  sendNotificationToStudio(
+    studioId: string,
+    payload: ServerNotificationPayload,
+  ) {
     let sentCount = 0;
     for (const [socketId, clientInfo] of this.clients.entries()) {
       if (clientInfo.studioId === studioId) {
@@ -94,7 +107,9 @@ export class NotificationGateway
         sentCount++;
       }
     }
-    this.logger.log(`Broadcasted notification to ${sentCount} clients in studio ${studioId}.`);
+    this.logger.log(
+      `Broadcasted notification to ${sentCount} clients in studio ${studioId}.`,
+    );
   }
 
   broadcastDataUpdate(entity: string, payload: any, studioId: string) {

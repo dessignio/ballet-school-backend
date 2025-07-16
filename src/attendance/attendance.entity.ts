@@ -19,7 +19,9 @@ import {
 import { Studio } from '../studio/studio.entity';
 
 @Entity('attendance_records')
-@Index(['studentId', 'classOfferingId', 'classDateTime', 'studioId'], { unique: true })
+@Index(['studentId', 'classOfferingId', 'classDateTime', 'studioId'], {
+  unique: true,
+})
 export class AttendanceRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -30,7 +32,6 @@ export class AttendanceRecord {
   @ManyToOne(() => Studio)
   @JoinColumn({ name: 'studio_id' })
   studio: Studio;
-
 
   @Column({ type: 'uuid' })
   studentId: string;

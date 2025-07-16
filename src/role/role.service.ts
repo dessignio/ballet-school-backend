@@ -31,18 +31,27 @@ export class RoleService {
   }
 
   async findAll(studioId: string): Promise<Role[]> {
-    return this.roleRepository.find({ where: { studioId }, order: { name: 'ASC' } });
+    return this.roleRepository.find({
+      where: { studioId },
+      order: { name: 'ASC' },
+    });
   }
 
   async findOne(id: string, studioId: string): Promise<Role> {
     const role = await this.roleRepository.findOneBy({ id, studioId });
     if (!role) {
-      throw new NotFoundException(`Role with ID "${id}" not found in this studio`);
+      throw new NotFoundException(
+        `Role with ID "${id}" not found in this studio`,
+      );
     }
     return role;
   }
 
-  async update(id: string, updateRoleDto: UpdateRoleDto, studioId: string): Promise<Role> {
+  async update(
+    id: string,
+    updateRoleDto: UpdateRoleDto,
+    studioId: string,
+  ): Promise<Role> {
     if (updateRoleDto.name) {
       const existingRoleWithSameName = await this.roleRepository.findOne({
         where: { name: updateRoleDto.name, studioId },
@@ -59,7 +68,9 @@ export class RoleService {
       ...updateRoleDto,
     });
     if (!role || role.studioId !== studioId) {
-      throw new NotFoundException(`Role with ID "${id}" not found in this studio to update`);
+      throw new NotFoundException(
+        `Role with ID "${id}" not found in this studio to update`,
+      );
     }
     return this.roleRepository.save(role);
   }
@@ -68,7 +79,9 @@ export class RoleService {
     // TODO: Add logic to check if any admin users are assigned this role before deletion
     const result = await this.roleRepository.delete({ id, studioId });
     if (result.affected === 0) {
-      throw new NotFoundException(`Role with ID "${id}" not found in this studio to delete`);
+      throw new NotFoundException(
+        `Role with ID "${id}" not found in this studio to delete`,
+      );
     }
   }
 }

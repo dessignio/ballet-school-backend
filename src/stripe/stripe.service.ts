@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
@@ -34,6 +34,7 @@ import { Payment, PaymentMethod } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
 import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 import { NotificationGateway } from 'src/notification/notification.gateway';
+import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Injectable()
 export class StripeService {
@@ -67,12 +68,15 @@ export class StripeService {
     paymentDto: CreateAuditionPaymentDto,
     studioId: string,
   ): Promise<{ clientSecret: string }> {
-    const stripeSettings = await this.settingsService.getStripeSettings(studioId);
+    const stripeSettings =
+      await this.settingsService.getStripeSettings(studioId);
     const auditionPriceId = stripeSettings.auditionPriceId;
     const auditionProductId = stripeSettings.auditionProductId;
 
     if (!auditionPriceId || !auditionProductId) {
-        throw new InternalServerErrorException('Audition Product/Price IDs are not configured for this studio.');
+      throw new InternalServerErrorException(
+        'Audition Product/Price IDs are not configured for this studio.',
+      );
     }
 
     try {
@@ -122,13 +126,15 @@ export class StripeService {
     }
   }
 
-
   async findOrCreateCustomer(
     studentId: string,
     studioId: string,
     paymentMethodId?: string,
   ): Promise<Stripe.Customer> {
-    const student = await this.studentRepository.findOneBy({ id: studentId, studioId });
+    const student = await this.studentRepository.findOneBy({
+      id: studentId,
+      studioId,
+    });
     if (!student) {
       throw new NotFoundException(`Student with ID ${studentId} not found.`);
     }
@@ -215,7 +221,6 @@ export class StripeService {
 
     const savedPayment = await this.paymentRepository.save(payment);
 
-    // Assuming student.studioId is available from the fetched student object
     if (student.studioId) {
       this.notificationGateway.sendNotificationToStudio(student.studioId, {
         title: 'Payment Received',
@@ -229,9 +234,6 @@ export class StripeService {
   }
 
   async getFinancialMetrics(studioId: string): Promise<FinancialMetricsDto> {
-    const thirtyDaysAgo = Math.floor(
-      (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
-    );
     const thirtyDaysAgo = Math.floor(
       (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
     );
@@ -301,7 +303,9 @@ export class StripeService {
 
           const productId = priceObject?.product as string;
           const productName =
-            productMap.get(productId) || priceObject?.nickname || 'Unknown Plan';
+            productMap.get(productId) ||
+            priceObject?.nickname ||
+            'Unknown Plan';
           planMixCounter[productName] = (planMixCounter[productName] || 0) + 1;
         }
       }
@@ -311,13 +315,15 @@ export class StripeService {
     await processSubscriptions('trialing');
 
     let canceledInLast30Days = 0;
-    for (const customerId of stripeCustomerIds) {
-      for await (const event of this.stripe.events.list({
-        customer: customerId,
-        type: 'customer.subscription.deleted',
-        created: { gte: thirtyDaysAgo },
-        limit: 100,
-      })) {
+    const studioCustomerIdsSet = new Set(stripeCustomerIds);
+
+    for await (const event of this.stripe.events.list({
+      type: 'customer.subscription.deleted',
+      created: { gte: thirtyDaysAgo },
+      limit: 100,
+    })) {
+      const eventCustomer = (event.data.object as any)?.customer;
+      if (eventCustomer && studioCustomerIdsSet.has(eventCustomer)) {
         canceledInLast30Days++;
       }
     }
@@ -437,7 +443,10 @@ export class StripeService {
       paymentMethodId,
     );
 
-    const student = await this.studentRepository.findOneBy({ id: studentId, studioId });
+    const student = await this.studentRepository.findOneBy({
+      id: studentId,
+      studioId,
+    });
 
     if (!student) {
       throw new InternalServerErrorException(
@@ -454,19 +463,22 @@ export class StripeService {
       };
 
       if (!student.stripeSubscriptionId) {
-        const stripeSettings = await this.settingsService.getStripeSettings(studioId);
+        const stripeSettings =
+          await this.settingsService.getStripeSettings(studioId);
         const enrollmentPriceId = stripeSettings.enrollmentPriceId;
         if (enrollmentPriceId) {
-            this.logger.log(
-              `Adding matricula fee for new subscriber: student ${student.id}`,
-            );
-            subscriptionParams.add_invoice_items = [
-              {
-                price: enrollmentPriceId,
-              },
-            ];
+          this.logger.log(
+            `Adding matricula fee for new subscriber: student ${student.id}`,
+          );
+          subscriptionParams.add_invoice_items = [
+            {
+              price: enrollmentPriceId,
+            },
+          ];
         } else {
-            this.logger.warn('Enrollment Price ID is not configured for this studio. Skipping matricula fee.');
+          this.logger.warn(
+            'Enrollment Price ID is not configured for this studio. Skipping matricula fee.',
+          );
         }
       }
 
@@ -527,12 +539,20 @@ export class StripeService {
 
       await this.studentRepository.save(student);
 
-      this.notificationGateway.broadcastDataUpdate('students', {
-        updatedId: student.id,
-      }, student.studioId);
-      this.notificationGateway.broadcastDataUpdate('subscriptions', {
-        studentId: student.id,
-      }, student.studioId);
+      this.notificationGateway.broadcastDataUpdate(
+        'students',
+        {
+          updatedId: student.id,
+        },
+        student.studioId,
+      );
+      this.notificationGateway.broadcastDataUpdate(
+        'subscriptions',
+        {
+          studentId: student.id,
+        },
+        student.studioId,
+      );
 
       return this.mapStripeSubscriptionToDetails(subscription);
     } catch (error) {
@@ -593,12 +613,20 @@ export class StripeService {
       }
 
       if (student) {
-        this.notificationGateway.broadcastDataUpdate('students', {
-          updatedId: student.id,
-        });
-        this.notificationGateway.broadcastDataUpdate('subscriptions', {
-          studentId: student.id,
-        });
+        this.notificationGateway.broadcastDataUpdate(
+          'students',
+          {
+            updatedId: student.id,
+          },
+          studioId,
+        );
+        this.notificationGateway.broadcastDataUpdate(
+          'subscriptions',
+          {
+            studentId: student.id,
+          },
+          studioId,
+        );
       }
 
       return this.mapStripeSubscriptionToDetails(updatedSubscription);
@@ -618,7 +646,10 @@ export class StripeService {
     paymentMethodId: string,
     studioId: string,
   ): Promise<{ success: boolean }> {
-    const student = await this.studentRepository.findOneBy({ id: studentId, studioId });
+    const student = await this.studentRepository.findOneBy({
+      id: studentId,
+      studioId,
+    });
     if (!student || !student.stripeCustomerId) {
       throw new NotFoundException(
         `Stripe customer not found for student ID ${studentId}.`,
@@ -639,12 +670,20 @@ export class StripeService {
         link: `/billing`,
       });
 
-      this.notificationGateway.broadcastDataUpdate('students', {
-        updatedId: student.id,
-      }, student.studioId);
-      this.notificationGateway.broadcastDataUpdate('subscriptions', {
-        studentId: student.id,
-      }, student.studioId);
+      this.notificationGateway.broadcastDataUpdate(
+        'students',
+        {
+          updatedId: student.id,
+        },
+        student.studioId,
+      );
+      this.notificationGateway.broadcastDataUpdate(
+        'subscriptions',
+        {
+          studentId: student.id,
+        },
+        student.studioId,
+      );
 
       return { success: true };
     } catch (error) {
@@ -663,7 +702,10 @@ export class StripeService {
     subscriptionId: string,
     studioId: string,
   ): Promise<StripeSubscriptionDetails> {
-    const student = await this.studentRepository.findOneBy({ id: studentId, studioId });
+    const student = await this.studentRepository.findOneBy({
+      id: studentId,
+      studioId,
+    });
     if (!student) {
       throw new NotFoundException(`Student with ID ${studentId} not found.`);
     }
@@ -692,12 +734,20 @@ export class StripeService {
         link: `/billing`,
       });
 
-      this.notificationGateway.broadcastDataUpdate('students', {
-        updatedId: student.id,
-      }, student.studioId);
-      this.notificationGateway.broadcastDataUpdate('subscriptions', {
-        studentId: student.id,
-      }, student.studioId);
+      this.notificationGateway.broadcastDataUpdate(
+        'students',
+        {
+          updatedId: student.id,
+        },
+        student.studioId,
+      );
+      this.notificationGateway.broadcastDataUpdate(
+        'subscriptions',
+        {
+          studentId: student.id,
+        },
+        student.studioId,
+      );
 
       return this.mapStripeSubscriptionToDetails(canceledSubscription);
     } catch (error) {
@@ -715,7 +765,10 @@ export class StripeService {
     studentId: string,
     studioId: string,
   ): Promise<StripeSubscriptionDetails | null> {
-    const student = await this.studentRepository.findOneBy({ id: studentId, studioId });
+    const student = await this.studentRepository.findOneBy({
+      id: studentId,
+      studioId,
+    });
     if (!student) {
       throw new NotFoundException(`Student with ID ${studentId} not found.`);
     }
@@ -781,8 +834,14 @@ export class StripeService {
     }
   }
 
-  async getPaymentsForStudent(studentId: string, studioId: string): Promise<Payment[]> {
-    const student = await this.studentRepository.findOneBy({ id: studentId, studioId });
+  async getPaymentsForStudent(
+    studentId: string,
+    studioId: string,
+  ): Promise<Payment[]> {
+    const student = await this.studentRepository.findOneBy({
+      id: studentId,
+      studioId,
+    });
     if (!student || !student.stripeCustomerId) {
       return this.paymentRepository.find({
         where: { studentId },
@@ -834,41 +893,44 @@ export class StripeService {
     }
   }
 
-  async getInvoicesForStudent(studentId: string, user: Partial<AdminUser>): Promise<Invoice[]> {
-    const student = await this.studentRepository.findOneBy({ id: studentId, studioId: user.studioId });
+  async getInvoicesForStudent(
+    studentId: string,
+    user: Partial<AdminUser>,
+  ): Promise<Invoice[]> {
+    const student = await this.studentRepository.findOneBy({
+      id: studentId,
+      studioId: user.studioId,
+    });
     if (!student) {
-        throw new NotFoundException('Student not found in this studio.');
+      throw new NotFoundException('Student not found in this studio.');
     }
 
-    // First, get locally saved invoices
     const localInvoices = await this.invoiceRepository.find({
-        where: { studentId, studioId: user.studioId },
-        order: { issueDate: 'DESC' },
+      where: { studentId, studioId: user.studioId },
+      order: { issueDate: 'DESC' },
     });
 
-    // If student is linked to Stripe, fetch from Stripe as well
     if (student.stripeCustomerId) {
-        try {
-          this.logger.log(
-            `Fetching Stripe invoices for customer ID: ${student.stripeCustomerId}`,
-          );
-          const stripeInvoicesData = await this.stripe.invoices.list({
-            customer: student.stripeCustomerId,
-            limit: 100,
-          });
+      try {
+        this.logger.log(
+          `Fetching Stripe invoices for customer ID: ${student.stripeCustomerId}`,
+        );
+        const stripeInvoicesData = await this.stripe.invoices.list({
+          customer: student.stripeCustomerId,
+          limit: 100,
+        });
 
-          // You might want to merge or just return stripe invoices if they are the source of truth
-          // For now, let's just log them. A full implementation would merge this data.
-          this.logger.log(`Found ${stripeInvoicesData.data.length} invoices on Stripe.`);
-
-        } catch (error) {
-          this.logger.error(
-            `Failed to fetch Stripe invoices for customer ${student.stripeCustomerId}: ${(error as Error).message}`,
-            (error as Error).stack,
-          );
-        }
+        this.logger.log(
+          `Found ${stripeInvoicesData.data.length} invoices on Stripe.`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to fetch Stripe invoices for customer ${student.stripeCustomerId}: ${(error as Error).message}`,
+          (error as Error).stack,
+        );
+      }
     }
-    
+
     return localInvoices;
   }
 
@@ -987,13 +1049,21 @@ export class StripeService {
       this.logger.log(
         `Webhook: Updated subscription for student ${student.id} to ${subscription.status}`,
       );
-      // Notify frontend of the change
-      this.notificationGateway.broadcastDataUpdate('students', {
-        updatedId: student.id,
-      }, student.studioId);
-      this.notificationGateway.broadcastDataUpdate('subscriptions', {
-        studentId: student.id,
-      }, student.studioId);
+
+      this.notificationGateway.broadcastDataUpdate(
+        'students',
+        {
+          updatedId: student.id,
+        },
+        student.studioId,
+      );
+      this.notificationGateway.broadcastDataUpdate(
+        'subscriptions',
+        {
+          studentId: student.id,
+        },
+        student.studioId,
+      );
     } else {
       this.logger.warn(
         `Webhook: Received subscription update for unknown customer ${subscription.customer}`,
@@ -1019,8 +1089,7 @@ export class StripeService {
       this.logger.log(
         `Audition fee payment succeeded for invoice: ${invoice.id}`,
       );
-      // Here you can add logic to create a "Prospect" record or similar
-      // using the customer details from the invoice.
+
       const customer = await this.stripe.customers.retrieve(
         invoice.customer as string,
       );
@@ -1028,13 +1097,6 @@ export class StripeService {
         this.logger.log(
           `Audition prospect created: ${customer.name} (${customer.email})`,
         );
-        // Example: Create a prospect entity in your DB
-        // await this.prospectRepository.save({
-        //   name: customer.name,
-        //   email: customer.email,
-        //   stripeCustomerId: customer.id,
-        //   auditionPaymentStatus: 'paid',
-        // });
       }
     } else {
       const customerId = invoice.customer as string;
@@ -1093,7 +1155,7 @@ export class StripeService {
 
       const newLocalInvoice = this.invoiceRepository.create({
         studentId: student.id,
-        studioId: student.studioId, // Add studioId here
+        studioId: student.studioId,
         membershipPlanId: localPlan?.id || null,
         membershipPlanName: localPlan?.name,
         invoiceNumber:
@@ -1134,7 +1196,7 @@ export class StripeService {
 
         const newLocalPayment = this.paymentRepository.create({
           studentId: student.id,
-          studioId: student.studioId, // Add studioId here
+          studioId: student.studioId,
           membershipPlanId: localPlan?.id || null,
           membershipPlanName: localPlan?.name,
           amountPaid: invoice.amount_paid / 100,
@@ -1196,13 +1258,21 @@ export class StripeService {
           this.logger.log(
             `Webhook: Updated student ${student.id} membership dates from subscription ${stripeSubscriptionId}.`,
           );
-          // Notify frontend of the change
-          this.notificationGateway.broadcastDataUpdate('students', {
-            updatedId: student.id,
-          });
-          this.notificationGateway.broadcastDataUpdate('subscriptions', {
-            studentId: student.id,
-          });
+
+          this.notificationGateway.broadcastDataUpdate(
+            'students',
+            {
+              updatedId: student.id,
+            },
+            student.studioId,
+          );
+          this.notificationGateway.broadcastDataUpdate(
+            'subscriptions',
+            {
+              studentId: student.id,
+            },
+            student.studioId,
+          );
         } catch (subError) {
           this.logger.error(
             `Webhook: Error retrieving Stripe subscription ${stripeSubscriptionId} for student update: ${(subError as Error).message}`,
