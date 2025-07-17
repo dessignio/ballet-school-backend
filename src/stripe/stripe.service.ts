@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -23,6 +24,7 @@ import {
   FinancialMetricsDto,
   RecordManualPaymentDto,
   CreateAuditionPaymentDto,
+  PlanMixItemDto,
 } from './dto';
 import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
@@ -31,6 +33,7 @@ import { Invoice } from 'src/invoice/invoice.entity';
 import { NotificationGateway } from 'src/notification/notification.gateway';
 import { AdminUser } from 'src/admin-user/admin-user.entity';
 import { Studio } from 'src/studio/studio.entity';
+import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 
 @Injectable()
 export class StripeService {
@@ -321,14 +324,178 @@ export class StripeService {
   }
 
   async getFinancialMetrics(studioId: string): Promise<FinancialMetricsDto> {
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      this.logger.warn(
+        `Studio ${studioId} not found or Stripe Connect account not configured. Cannot fetch financial metrics.`,
+      );
+      return {
+        mrr: 0,
+        activeSubscribers: 0,
+        arpu: 0,
+        churnRate: 0,
+        ltv: 0,
+        planMix: [],
+        paymentFailureRate: 0,
+      };
+    }
+
+    const thirtyDaysAgo = Math.floor(
+      (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
+    );
+    let mrr = 0;
+    let activeSubscribers = 0;
+    const planMixCounter: { [key: string]: number } = {};
+
+    const studentsInStudio = await this.studentRepository.find({
+      where: { studioId: studioId },
+      select: ['stripeCustomerId'],
+    });
+
+    const stripeCustomerIds = studentsInStudio
+      .map((s) => s.stripeCustomerId)
+      .filter((id) => id !== null) as string[];
+
+    if (stripeCustomerIds.length === 0) {
+      return {
+        mrr: 0,
+        activeSubscribers: 0,
+        arpu: 0,
+        churnRate: 0,
+        ltv: 0,
+        planMix: [],
+        paymentFailureRate: 0,
+      };
+    }
+
+    const productList = await this.stripe.products.list(
+      { active: true, limit: 100 },
+      { stripeAccount: studio.stripeAccountId },
+    );
+    const productMap = new Map<string, string>();
+    for (const product of productList.data) {
+      productMap.set(product.id, product.name);
+    }
+
+    const processSubscriptions = async (status: Stripe.Subscription.Status) => {
+      for (const customerId of stripeCustomerIds) {
+        for await (const sub of this.stripe.subscriptions.list(
+          {
+            customer: customerId,
+            status: status,
+            limit: 100,
+          },
+          { stripeAccount: studio.stripeAccountId || undefined },
+        )) {
+          const subscription = sub as any;
+          activeSubscribers++;
+          const priceObject = subscription.items.data[0]?.price;
+
+          if (status === 'active' && priceObject?.unit_amount !== null) {
+            const price = priceObject.unit_amount / 100;
+            let monthlyValue = 0;
+            if (priceObject.recurring) {
+              switch (priceObject.recurring.interval) {
+                case 'month':
+                  monthlyValue = price;
+                  break;
+                case 'year':
+                  monthlyValue = price / 12;
+                  break;
+                case 'week':
+                  monthlyValue = price * 4.33;
+                  break;
+              }
+            }
+            mrr += monthlyValue;
+          }
+
+          const productId = priceObject?.product as string;
+          const productName =
+            productMap.get(productId) ||
+            priceObject?.nickname ||
+            'Unknown Plan';
+          planMixCounter[productName] = (planMixCounter[productName] || 0) + 1;
+        }
+      }
+    };
+
+    await processSubscriptions('active');
+    await processSubscriptions('trialing');
+
+    let canceledInLast30Days = 0;
+    const studioCustomerIdsSet = new Set(stripeCustomerIds);
+
+    for await (const event of this.stripe.events.list(
+      {
+        type: 'customer.subscription.deleted',
+        created: { gte: thirtyDaysAgo },
+        limit: 100,
+      },
+      { stripeAccount: studio.stripeAccountId },
+    )) {
+      const eventCustomer = (event.data.object as any)?.customer;
+      if (eventCustomer && studioCustomerIdsSet.has(eventCustomer)) {
+        canceledInLast30Days++;
+      }
+    }
+
+    const churnRate =
+      activeSubscribers + canceledInLast30Days > 0
+        ? (canceledInLast30Days / (activeSubscribers + canceledInLast30Days)) *
+          100
+        : 0;
+
+    const arpu = activeSubscribers > 0 ? mrr / activeSubscribers : 0;
+    const ltv = churnRate > 0 ? arpu / (churnRate / 100) : 0;
+
+    let succeededInvoices = 0;
+    let failedInvoices = 0;
+    const nowTimestamp = Math.floor(Date.now() / 1000);
+
+    for (const customerId of stripeCustomerIds) {
+      for await (const invoice of this.stripe.invoices.list(
+        {
+          customer: customerId,
+          created: { gte: thirtyDaysAgo },
+          limit: 100,
+        },
+        { stripeAccount: studio.stripeAccountId },
+      )) {
+        const inv = invoice as any;
+        if (
+          inv.billing_reason !== 'subscription_cycle' &&
+          inv.billing_reason !== 'subscription_create'
+        ) {
+          continue;
+        }
+        if (inv.status === 'paid') {
+          succeededInvoices++;
+        } else if (
+          inv.status === 'open' &&
+          inv.due_date &&
+          inv.due_date < nowTimestamp
+        ) {
+          failedInvoices++;
+        }
+      }
+    }
+    const totalRenewals = succeededInvoices + failedInvoices;
+    const paymentFailureRate =
+      totalRenewals > 0 ? (failedInvoices / totalRenewals) * 100 : 0;
+
+    const planMix: PlanMixItemDto[] = Object.entries(planMixCounter).map(
+      ([name, count]) => ({ name, value: count }),
+    );
+
     return {
-      mrr: 0,
-      activeSubscribers: 0,
-      arpu: 0,
-      churnRate: 0,
-      ltv: 0,
-      planMix: [],
-      paymentFailureRate: 0,
+      mrr: parseFloat(mrr.toFixed(2)),
+      activeSubscribers,
+      arpu: parseFloat(arpu.toFixed(2)),
+      churnRate: parseFloat(churnRate.toFixed(1)),
+      ltv: parseFloat(ltv.toFixed(2)),
+      planMix,
+      paymentFailureRate: parseFloat(paymentFailureRate.toFixed(1)),
     };
   }
 
@@ -527,6 +694,17 @@ export class StripeService {
   private mapStripeSubscriptionToDetails(
     subscription: Stripe.Subscription,
   ): StripeSubscriptionDetails {
+    const latestInvoice = subscription.latest_invoice;
+    const paymentIntent =
+      latestInvoice && typeof latestInvoice === 'object'
+        ? (latestInvoice as any).payment_intent
+        : null;
+
+    const clientSecret =
+      paymentIntent && typeof paymentIntent === 'object'
+        ? paymentIntent.client_secret
+        : null;
+
     const periodEnd = (subscription as any).current_period_end;
     const periodEndNumber =
       typeof periodEnd === 'number' && !isNaN(periodEnd) ? periodEnd : 0;
@@ -540,10 +718,11 @@ export class StripeService {
       id: subscription.id,
       status: subscription.status as StripeSubscriptionDetails['status'],
       current_period_end: periodEndNumber,
-      cancel_at_period_end: subscription.cancel_at_period_end,
       stripeCustomerId: customerId,
       items: subscription.items,
       current_period_start: (subscription as any).current_period_start,
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      clientSecret: clientSecret,
     };
   }
 
@@ -1089,58 +1268,237 @@ export class StripeService {
     }
   }
 
-  async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-    const invoiceData = invoice as any;
+  async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
+    this.logger.log(
+      `Webhook: Invoice payment succeeded for invoice ID: ${invoice.id}`,
+    );
+    const invoiceAny: any = invoice; // Cast to any to access properties not directly on Stripe.Invoice type
 
-    const customerId = invoiceData.customer;
-    if (!customerId) {
-      this.logger.warn('Invoice payment succeeded event without customer ID.');
-      return;
-    }
-
-    const student = await this.studentRepository.findOneBy({
-      stripeCustomerId: customerId,
-    });
-
-    if (!student) {
+    if (!invoiceAny.customer) {
       this.logger.warn(
-        `Received invoice payment for unknown customer ID: ${customerId}`,
+        `Webhook: Invoice ${invoiceAny.id} paid but has no customer ID.`,
       );
       return;
     }
 
-    const paymentIntentId = invoiceData.payment_intent;
-    if (!paymentIntentId) {
-      this.logger.warn(`Invoice ${invoiceData.id} has no payment_intent.`);
+    const connectedAccountId = invoiceAny.account; // Get the connected account ID from the invoice
+    if (!connectedAccountId) {
+      this.logger.warn(
+        `Webhook: Invoice ${invoiceAny.id} has no associated connected account. Skipping processing.`,
+      );
       return;
     }
 
-    const newPayment = this.paymentRepository.create({
-      studentId: student.id,
-      studentName: `${student.firstName} ${student.lastName}`,
-      amountPaid: invoiceData.amount_paid / 100,
-      paymentDate: new Date(invoiceData.status_transitions.paid_at * 1000)
-        .toISOString()
-        .split('T')[0],
-      paymentMethod: 'Credit Card',
-      transactionId: paymentIntentId,
-      invoiceId: invoiceData.id,
-      studioId: student.studioId,
-      membershipPlanName:
-        invoiceData.lines.data[0]?.description || 'Monthly Subscription',
-    });
+    const isAuditionFee =
+      invoiceAny.lines.data[0]?.price?.product === 'prod_ScZhhq6OolKX7V';
 
-    await this.paymentRepository.save(newPayment);
-    this.logger.log(
-      `Saved successful payment for student ${student.id} from invoice ${invoiceData.id}`,
-    );
+    if (isAuditionFee) {
+      this.logger.log(
+        `Audition fee payment succeeded for invoice: ${invoiceAny.id}`,
+      );
 
-    this.notificationGateway.sendNotificationToStudio(student.studioId, {
-      title: 'Payment Succeeded',
-      message: `A payment of $${newPayment.amountPaid.toFixed(2)} was successfully processed for ${student.firstName} ${student.lastName}.`,
-      type: 'success',
-      link: `/billing/students/${student.id}`,
-    });
+      const customer = await this.stripe.customers.retrieve(
+        invoiceAny.customer as string,
+        { stripeAccount: connectedAccountId }, // Retrieve customer on connected account
+      );
+      if (customer && !customer.deleted) {
+        this.logger.log(
+          `Audition prospect created: ${customer.name} (${customer.email})`,
+        );
+      }
+    } else {
+      const customerId = invoiceAny.customer as string;
+      // Retrieve customer on connected account
+      const stripeCustomer = await this.stripe.customers.retrieve(customerId, {
+        stripeAccount: connectedAccountId,
+      });
+      const studioIdFromStripe = (stripeCustomer as any)?.metadata?.studio_id;
+
+      if (!studioIdFromStripe) {
+        this.logger.warn(
+          `Webhook: Stripe customer ${customerId} has no associated studio_id in metadata. Skipping invoice processing.`,
+        );
+        return;
+      }
+
+      const student = await this.studentRepository.findOne({
+        where: { stripeCustomerId: customerId, studioId: studioIdFromStripe },
+      });
+      if (!student) {
+        this.logger.warn(
+          `Webhook: Student not found for Stripe Customer ID ${invoiceAny.customer} and studio ${studioIdFromStripe} from subscription invoice ${invoiceAny.id}.`,
+        );
+        return;
+      }
+
+      const stripeSubscriptionId =
+        typeof invoiceAny.subscription === 'string'
+          ? invoiceAny.subscription
+          : null;
+      let localPlan: MembershipPlanDefinitionEntity | null = null;
+      let paymentMethodType: PaymentMethod = 'Stripe Subscription';
+
+      if (stripeSubscriptionId) {
+        const stripePriceId = invoiceAny.lines?.data[0]?.price?.id;
+        if (stripePriceId) {
+          localPlan = await this.membershipPlanRepository.findOne({
+            where: { stripePriceId },
+          });
+          if (!localPlan) {
+            this.logger.warn(
+              `Webhook: Local plan not found for Stripe Price ID ${stripePriceId} from invoice ${invoiceAny.id}.`,
+            );
+          }
+        }
+      } else {
+        paymentMethodType = 'Credit Card';
+      }
+
+      const invoiceItems: InvoiceItem[] = invoiceAny.lines.data.map((line) => ({
+        id: line.id,
+        description: line.description || 'N/A',
+        quantity: line.quantity || 1,
+        unitPrice: line.price?.unit_amount_decimal
+          ? parseFloat(line.price.unit_amount_decimal) / 100
+          : line.amount / 100 / (line.quantity || 1),
+        amount: line.amount / 100,
+      }));
+
+      const newLocalInvoice = this.invoiceRepository.create({
+        studentId: student.id,
+        studioId: student.studioId,
+        membershipPlanId: localPlan?.id, // CORRECCIÓN 1: Quitado '|| null'
+        membershipPlanName: localPlan?.name,
+        invoiceNumber:
+          invoiceAny.number ||
+          `STRIPE-${(invoiceAny.id || '').substring(0, 12).toUpperCase()}`,
+        issueDate: new Date(invoiceAny.created * 1000)
+          .toISOString()
+          .split('T')[0],
+        dueDate: invoiceAny.due_date
+          ? new Date(invoiceAny.due_date * 1000).toISOString().split('T')[0]
+          : new Date(invoiceAny.created * 1000).toISOString().split('T')[0],
+        items: invoiceItems,
+        subtotal: invoiceAny.subtotal / 100,
+        taxAmount: ((invoiceAny.tax as number) || 0) / 100,
+        totalAmount: invoiceAny.total / 100,
+        amountPaid: invoiceAny.amount_paid / 100,
+        amountDue: invoiceAny.amount_due / 100,
+        status: invoiceAny.paid
+          ? 'Paid'
+          : (invoiceAny.status as InvoiceStatus) || 'Sent',
+        notes: `Stripe Invoice ID: ${invoiceAny.id || 'N/A'}`,
+        stripeInvoiceId: invoiceAny.id || undefined,
+      });
+      const savedLocalInvoice =
+        await this.invoiceRepository.save(newLocalInvoice);
+      this.logger.log(
+        `Webhook: Saved local invoice ${savedLocalInvoice.id} for Stripe invoice ${invoiceAny.id}`,
+      );
+
+      if (invoiceAny.paid && (invoice as any).payment_intent) {
+        const paymentDateTimestamp =
+          invoiceAny.status_transitions.paid_at || invoiceAny.created;
+        const paymentDate = new Date(paymentDateTimestamp * 1000)
+          .toISOString()
+          .split('T')[0];
+
+        // CORRECCIÓN 2: Se usa (invoice as any) para asegurar el acceso.
+        const paymentIntent = (invoice as any).payment_intent;
+        const transactionId =
+          typeof paymentIntent === 'string' ? paymentIntent : paymentIntent?.id;
+
+        const newLocalPayment = this.paymentRepository.create({
+          studentId: student.id,
+          studioId: student.studioId,
+          membershipPlanId: localPlan?.id || undefined,
+          membershipPlanName: localPlan?.name,
+          amountPaid: invoiceAny.amount_paid / 100,
+          paymentDate: paymentDate,
+          paymentMethod: paymentMethodType,
+          transactionId: transactionId,
+          invoiceId: savedLocalInvoice.id,
+          notes: `Payment for Stripe Invoice: ${invoiceAny.id}`,
+        });
+        await this.paymentRepository.save(newLocalPayment);
+        this.logger.log(
+          `Webhook: Saved local payment for local invoice ${savedLocalInvoice.id}`,
+        );
+
+        this.notificationGateway.sendNotificationToStudio(student.studioId, {
+          title: 'Stripe Payment Succeeded',
+          message: `Received ${(invoiceAny.amount_paid / 100).toFixed(2)} from ${student.firstName} ${student.lastName}.`,
+          type: 'success',
+          link: `/billing`,
+        });
+      }
+
+      if (stripeSubscriptionId) {
+        try {
+          const stripeSub = await this.stripe.subscriptions.retrieve(
+            stripeSubscriptionId,
+            {
+              stripeAccount: connectedAccountId, // Retrieve subscription on connected account
+            },
+          );
+          if (
+            typeof (stripeSub as any).current_period_start === 'number' &&
+            (stripeSub as any).current_period_start
+          ) {
+            student.membershipStartDate = new Date(
+              (stripeSub as any).current_period_start * 1000,
+            )
+              .toISOString()
+              .split('T')[0];
+          } else {
+            student.membershipStartDate = null;
+          }
+          if (
+            typeof (stripeSub as any).current_period_end === 'number' &&
+            (stripeSub as any).current_period_end
+          ) {
+            student.membershipRenewalDate = new Date(
+              (stripeSub as any).current_period_end * 1000,
+            )
+              .toISOString()
+              .split('T')[0];
+          } else {
+            student.membershipRenewalDate = null;
+          }
+          student.stripeSubscriptionStatus =
+            stripeSub.status as StripeSubscriptionStatus;
+          if (localPlan) {
+            student.membershipPlanId = localPlan.id;
+            student.membershipType = localPlan.name;
+            student.membershipPlanName = localPlan.name;
+          }
+          await this.studentRepository.save(student);
+          this.logger.log(
+            `Webhook: Updated student ${student.id} membership dates from subscription ${stripeSubscriptionId}.`,
+          );
+
+          this.notificationGateway.broadcastDataUpdate(
+            'students',
+            {
+              updatedId: student.id,
+            },
+            student.studioId,
+          );
+          this.notificationGateway.broadcastDataUpdate(
+            'subscriptions',
+            {
+              studentId: student.id,
+            },
+            student.studioId,
+          );
+        } catch (subError) {
+          this.logger.error(
+            `Webhook: Error retrieving Stripe subscription ${stripeSubscriptionId} for student update: ${(subError as Error).message}`,
+            (subError as Error).stack,
+          );
+        }
+      }
+    }
   }
 
   public constructEvent(payload: Buffer, signature: string): Stripe.Event {
@@ -1167,5 +1525,68 @@ export class StripeService {
   async handleAccountUpdated(account: Stripe.Account) {
     // Implement logic for account updates
     this.logger.log(`Stripe Connect account updated: ${account.id}`);
+  }
+
+  async handleAccountApplicationAuthorized(
+    account: Stripe.Account,
+  ): Promise<void> {
+    this.logger.log(
+      `Webhook: Account application authorized for account ID: ${account.id}`,
+    );
+    const studioIdFromStripe = (account as any)?.metadata?.studio_id;
+
+    if (!studioIdFromStripe) {
+      this.logger.warn(
+        `Webhook: Stripe account ${account.id} has no associated studio_id in metadata. Skipping processing.`,
+      );
+      return;
+    }
+
+    const studio = await this.studioRepository.findOneBy({
+      id: studioIdFromStripe,
+    });
+
+    if (studio) {
+      // Update studio status or relevant fields based on authorization
+      // For example, you might set a flag indicating the account is authorized
+      // studio.stripeAccountAuthorized = true;
+      await this.studioRepository.save(studio);
+      this.logger.log(
+        `Studio ${studio.id} Stripe account application authorized.`,
+      );
+    } else {
+      this.logger.warn(
+        `Webhook: Received account.application.authorized for unknown studio_id ${studioIdFromStripe}.`,
+      );
+    }
+  }
+
+  async handleAccountExternalAccountCreated(
+    account: Stripe.Account,
+  ): Promise<void> {
+    this.logger.log(
+      `Webhook: External account created for account ID: ${account.id}`,
+    );
+    const studioIdFromStripe = (account as any)?.metadata?.studio_id;
+
+    if (!studioIdFromStripe) {
+      this.logger.warn(
+        `Webhook: Stripe account ${account.id} has no associated studio_id in metadata. Skipping processing.`,
+      );
+      return;
+    }
+
+    const studio = await this.studioRepository.findOneBy({
+      id: studioIdFromStripe,
+    });
+
+    if (studio) {
+      // Log or update studio with payout details if necessary
+      this.logger.log(`Studio ${studio.id} Stripe external account created.`);
+    } else {
+      this.logger.warn(
+        `Webhook: Received account.external_account.created for unknown studio_id ${studioIdFromStripe}.`,
+      );
+    }
   }
 }

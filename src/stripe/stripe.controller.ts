@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/await-thenable */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -352,6 +352,16 @@ export class StripeController {
       case 'account.updated': {
         const account = event.data.object;
         await this.stripeService.handleAccountUpdated(account);
+        break;
+      }
+      case 'account.application.authorized': {
+        const account = event.data.object as unknown as Stripe.Account;
+        await this.stripeService.handleAccountApplicationAuthorized(account);
+        break;
+      }
+      case 'account.external_account.created': {
+        const account = event.data.object as unknown as Stripe.Account;
+        await this.stripeService.handleAccountExternalAccountCreated(account);
         break;
       }
       default:
