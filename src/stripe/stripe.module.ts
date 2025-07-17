@@ -10,6 +10,7 @@ import { Payment } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
 import { NotificationModule } from 'src/notification/notification.module';
 import { SettingsModule } from '../settings/settings.module';
+import { Studio } from 'src/studio/studio.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SettingsModule } from '../settings/settings.module';
       MembershipPlanDefinitionEntity,
       Payment,
       Invoice,
+      Studio,
     ]),
     NotificationModule,
   ],

@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/await-thenable */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
 import {
@@ -23,7 +26,7 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
-import { StripeService } from './stripe.service';
+import { StripeService } from './stripe.service'; // <-- CORRECCIÓN AQUÍ
 import {
   CreateStripeSubscriptionDto,
   FinancialMetricsDto,
@@ -42,13 +45,12 @@ import { Public } from 'src/auth/decorators/public.decorator';
 import * as https from 'https';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Request } from 'express';
-import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
+import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 interface RequestWithRawBody extends ExpressRequest {
   rawBody?: any;
 }
 
-// Define a type for the JWT payload for type safety
 interface JwtPayload {
   userId: string;
   username: string;
@@ -66,6 +68,7 @@ interface JwtPayload {
   }),
 )
 export class StripeController {
+  logger: any;
   constructor(private readonly stripeService: StripeService) {}
 
   @Public()
@@ -127,6 +130,31 @@ export class StripeController {
     return this.stripeService.recordManualPayment(recordPaymentDto);
   }
 
+  @Post('connect/account')
+  async createConnectAccount(@Req() req: Request) {
+    const studioId = (req.user as JwtPayload).studioId;
+    const studio = await this.stripeService.getStudioWithAdminUser(studioId);
+    if (!studio) {
+      throw new NotFoundException(`Studio with ID ${studioId} not found.`);
+    }
+    return this.stripeService.createConnectAccount(studio);
+  }
+
+  @Get('connect/account-link')
+  async createAccountLink(@Req() req: Request): Promise<{ url: string }> {
+    const studioId = (req.user as JwtPayload).studioId;
+    const studio = await this.stripeService.getStudioWithAdminUser(studioId);
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Stripe Connect account not configured for this studio.',
+      );
+    }
+    const url = await this.stripeService.createAccountLink(
+      studio.stripeAccountId,
+    );
+    return { url };
+  }
+
   @Get('students/:studentId/stripe-subscription')
   async getStudentSubscription(
     @Param('studentId', ParseUUIDPipe) studentId: string,
@@ -150,8 +178,14 @@ export class StripeController {
   async getInvoicePdf(
     @Param('invoiceId') invoiceId: string,
     @Res({ passthrough: true }) res: ExpressResponse,
+    @Req() req: Request, // Añadido para obtener studioId
   ): Promise<StreamableFile> {
-    const pdfUrl = await this.stripeService.getInvoicePdfUrl(invoiceId);
+    const studioId = (req.user as JwtPayload).studioId;
+    // Asumiendo que getInvoicePdfUrl ahora necesita studioId para cuentas Connect
+    const pdfUrl = await this.stripeService.getInvoicePdfUrl(
+      invoiceId,
+      studioId,
+    );
 
     if (!pdfUrl) {
       throw new NotFoundException(
@@ -229,8 +263,6 @@ export class StripeController {
     @Query('studentId', ParseUUIDPipe) studentId: string,
     @Req() req: Request,
   ) {
-    // CORRECCIÓN: El servicio espera el objeto user, no solo el studioId.
-    // Usamos Partial<AdminUser> como en casos anteriores.
     return this.stripeService.getInvoicesForStudent(
       studentId,
       req.user as Partial<AdminUser>,
@@ -288,12 +320,23 @@ export class StripeController {
       );
     }
 
+    const connectedAccountId = event.account;
+
     switch (event.type) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object;
-        await this.stripeService.handleSubscriptionUpdated(subscription);
+        if (!connectedAccountId) {
+          this.logger.warn(
+            `Subscription webhook received without an account ID: ${event.id}`,
+          );
+          break;
+        }
+        await this.stripeService.handleSubscriptionUpdated(
+          subscription,
+          connectedAccountId,
+        );
         break;
       }
       case 'invoice.payment_succeeded': {
@@ -304,6 +347,11 @@ export class StripeController {
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
         await this.stripeService.handleInvoicePaymentFailed(invoice);
+        break;
+      }
+      case 'account.updated': {
+        const account = event.data.object;
+        await this.stripeService.handleAccountUpdated(account);
         break;
       }
       default:

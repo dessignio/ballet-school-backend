@@ -1,12 +1,9 @@
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 /* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @typescript-eslint/no-base-to-string */
 
 import {
   Injectable,
@@ -24,7 +21,6 @@ import Stripe from 'stripe';
 import {
   CreateStripeSubscriptionDto,
   FinancialMetricsDto,
-  PlanMixItemDto,
   RecordManualPaymentDto,
   CreateAuditionPaymentDto,
 } from './dto';
@@ -32,14 +28,14 @@ import { StripeSubscriptionDetails } from './stripe.interface';
 import { MembershipPlanDefinitionEntity } from 'src/membership-plan/membership-plan.entity';
 import { Payment, PaymentMethod } from 'src/payment/payment.entity';
 import { Invoice } from 'src/invoice/invoice.entity';
-import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 import { NotificationGateway } from 'src/notification/notification.gateway';
 import { AdminUser } from 'src/admin-user/admin-user.entity';
+import { Studio } from 'src/studio/studio.entity';
 
 @Injectable()
 export class StripeService {
   private readonly stripe: Stripe;
-  private readonly logger = new Logger(StripeService.name);
+  public readonly logger = new Logger(StripeService.name);
 
   constructor(
     @InjectRepository(Student)
@@ -50,6 +46,8 @@ export class StripeService {
     private paymentRepository: Repository<Payment>,
     @InjectRepository(Invoice)
     private invoiceRepository: Repository<Invoice>,
+    @InjectRepository(Studio)
+    private studioRepository: Repository<Studio>,
     private readonly notificationGateway: NotificationGateway,
     private readonly configService: ConfigService,
     private readonly settingsService: SettingsService,
@@ -61,6 +59,64 @@ export class StripeService {
     this.stripe = new Stripe(stripeSecretKey, {
       // @ts-ignore
       apiVersion: '2024-06-20',
+    });
+  }
+
+  async createConnectAccount(studio: Studio): Promise<Studio> {
+    try {
+      const account = await this.stripe.accounts.create({
+        type: 'express',
+        country: 'US',
+        email: studio.owner.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        metadata: {
+          studio_id: studio.id,
+          studio_name: studio.name,
+        },
+      });
+
+      studio.stripeAccountId = account.id;
+      return this.studioRepository.save(studio);
+    } catch (error) {
+      this.logger.error(
+        `Failed to create Stripe Connect account for studio ${studio.id}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        `Failed to create Stripe Connect account: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async createAccountLink(stripeAccountId: string): Promise<string> {
+    try {
+      const accountLink = await this.stripe.accountLinks.create({
+        account: stripeAccountId,
+        refresh_url: this.configService.get<string>(
+          'STRIPE_CONNECT_REFRESH_URL',
+        ),
+        return_url: this.configService.get<string>('STRIPE_CONNECT_RETURN_URL'),
+        type: 'account_onboarding',
+      });
+      return accountLink.url;
+    } catch (error) {
+      this.logger.error(
+        `Failed to create Stripe Connect account link for account ${stripeAccountId}: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      throw new InternalServerErrorException(
+        `Failed to create Stripe Connect account link: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  async getStudioWithAdminUser(studioId: string): Promise<Studio | null> {
+    return this.studioRepository.findOne({
+      where: { id: studioId },
+      relations: ['owner'],
     });
   }
 
@@ -79,6 +135,13 @@ export class StripeService {
       );
     }
 
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Studio not found or Stripe Connect account not configured for this studio.',
+      );
+    }
+
     try {
       const price = await this.stripe.prices.retrieve(auditionPriceId);
       if (!price || !price.unit_amount) {
@@ -87,24 +150,33 @@ export class StripeService {
         );
       }
 
-      const customer = await this.stripe.customers.create({
-        name: paymentDto.name,
-        email: paymentDto.email,
-        description: 'Audition Prospect',
-      });
+      const customer = await this.stripe.customers.create(
+        {
+          name: paymentDto.name,
+          email: paymentDto.email,
+          description: 'Audition Prospect',
+        },
+        { stripeAccount: studio.stripeAccountId },
+      );
 
-      const paymentIntent = await this.stripe.paymentIntents.create({
-        amount: price.unit_amount,
-        currency: price.currency,
-        customer: customer.id,
-        description: 'Audition Fee Payment',
-        metadata: {
-          productId: auditionProductId,
+      const paymentIntent = await this.stripe.paymentIntents.create(
+        {
+          amount: price.unit_amount,
+          currency: price.currency,
+          customer: customer.id,
+          description: 'Audition Fee Payment',
+          metadata: {
+            productId: auditionProductId,
+          },
+          automatic_payment_methods: {
+            enabled: true,
+          },
+          transfer_data: {
+            destination: studio.stripeAccountId,
+          },
         },
-        automatic_payment_methods: {
-          enabled: true,
-        },
-      });
+        { stripeAccount: studio.stripeAccountId },
+      );
 
       if (!paymentIntent.client_secret) {
         throw new InternalServerErrorException(
@@ -139,19 +211,31 @@ export class StripeService {
       throw new NotFoundException(`Student with ID ${studentId} not found.`);
     }
 
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Studio not found or Stripe Connect account not configured for this studio.',
+      );
+    }
+
     if (student.stripeCustomerId) {
       try {
         const customer = await this.stripe.customers.retrieve(
           student.stripeCustomerId,
+          { stripeAccount: studio.stripeAccountId },
         );
         if (customer && !customer.deleted) {
           if (paymentMethodId) {
             await this.stripe.paymentMethods.attach(paymentMethodId, {
               customer: customer.id,
             });
-            await this.stripe.customers.update(customer.id, {
-              invoice_settings: { default_payment_method: paymentMethodId },
-            });
+            await this.stripe.customers.update(
+              customer.id,
+              {
+                invoice_settings: { default_payment_method: paymentMethodId },
+              },
+              { stripeAccount: studio.stripeAccountId },
+            );
           }
           return customer as Stripe.Customer;
         }
@@ -177,7 +261,9 @@ export class StripeService {
     }
 
     try {
-      const newCustomer = await this.stripe.customers.create(customerParams);
+      const newCustomer = await this.stripe.customers.create(customerParams, {
+        stripeAccount: studio.stripeAccountId,
+      });
       student.stripeCustomerId = newCustomer.id;
       await this.studentRepository.save(student);
       return newCustomer;
@@ -217,6 +303,7 @@ export class StripeService {
       notes: dto.notes,
       studentName: `${student.firstName} ${student.lastName}`,
       membershipPlanName: plan.name,
+      studioId: student.studioId,
     });
 
     const savedPayment = await this.paymentRepository.save(payment);
@@ -234,153 +321,14 @@ export class StripeService {
   }
 
   async getFinancialMetrics(studioId: string): Promise<FinancialMetricsDto> {
-    const thirtyDaysAgo = Math.floor(
-      (Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000,
-    );
-    let mrr = 0;
-    let activeSubscribers = 0;
-    const planMixCounter: { [key: string]: number } = {};
-
-    const studentsInStudio = await this.studentRepository.find({
-      where: { studioId: studioId },
-      select: ['stripeCustomerId'],
-    });
-
-    const stripeCustomerIds = studentsInStudio
-      .map((s) => s.stripeCustomerId)
-      .filter((id) => id !== null) as string[];
-
-    if (stripeCustomerIds.length === 0) {
-      return {
-        mrr: 0,
-        activeSubscribers: 0,
-        arpu: 0,
-        churnRate: 0,
-        ltv: 0,
-        planMix: [],
-        paymentFailureRate: 0,
-      };
-    }
-
-    const productList = await this.stripe.products.list({
-      active: true,
-      limit: 100,
-    });
-    const productMap = new Map<string, string>();
-    for (const product of productList.data) {
-      productMap.set(product.id, product.name);
-    }
-
-    const processSubscriptions = async (status: Stripe.Subscription.Status) => {
-      for (const customerId of stripeCustomerIds) {
-        for await (const sub of this.stripe.subscriptions.list({
-          customer: customerId,
-          status: status,
-          limit: 100,
-        })) {
-          const subscription = sub as any;
-          activeSubscribers++;
-          const priceObject = subscription.items.data[0]?.price;
-
-          if (status === 'active' && priceObject?.unit_amount !== null) {
-            const price = priceObject.unit_amount / 100;
-            let monthlyValue = 0;
-            if (priceObject.recurring) {
-              switch (priceObject.recurring.interval) {
-                case 'month':
-                  monthlyValue = price;
-                  break;
-                case 'year':
-                  monthlyValue = price / 12;
-                  break;
-                case 'week':
-                  monthlyValue = price * 4.33;
-                  break;
-              }
-            }
-            mrr += monthlyValue;
-          }
-
-          const productId = priceObject?.product as string;
-          const productName =
-            productMap.get(productId) ||
-            priceObject?.nickname ||
-            'Unknown Plan';
-          planMixCounter[productName] = (planMixCounter[productName] || 0) + 1;
-        }
-      }
-    };
-
-    await processSubscriptions('active');
-    await processSubscriptions('trialing');
-
-    let canceledInLast30Days = 0;
-    const studioCustomerIdsSet = new Set(stripeCustomerIds);
-
-    for await (const event of this.stripe.events.list({
-      type: 'customer.subscription.deleted',
-      created: { gte: thirtyDaysAgo },
-      limit: 100,
-    })) {
-      const eventCustomer = (event.data.object as any)?.customer;
-      if (eventCustomer && studioCustomerIdsSet.has(eventCustomer)) {
-        canceledInLast30Days++;
-      }
-    }
-
-    const churnRate =
-      activeSubscribers + canceledInLast30Days > 0
-        ? (canceledInLast30Days / (activeSubscribers + canceledInLast30Days)) *
-          100
-        : 0;
-
-    const arpu = activeSubscribers > 0 ? mrr / activeSubscribers : 0;
-    const ltv = churnRate > 0 ? arpu / (churnRate / 100) : 0;
-
-    let succeededInvoices = 0;
-    let failedInvoices = 0;
-    const nowTimestamp = Math.floor(Date.now() / 1000);
-
-    for (const customerId of stripeCustomerIds) {
-      for await (const invoice of this.stripe.invoices.list({
-        customer: customerId,
-        created: { gte: thirtyDaysAgo },
-        limit: 100,
-      })) {
-        const inv = invoice as any;
-        if (
-          inv.billing_reason !== 'subscription_cycle' &&
-          inv.billing_reason !== 'subscription_create'
-        ) {
-          continue;
-        }
-        if (inv.status === 'paid') {
-          succeededInvoices++;
-        } else if (
-          inv.status === 'open' &&
-          inv.due_date &&
-          inv.due_date < nowTimestamp
-        ) {
-          failedInvoices++;
-        }
-      }
-    }
-    const totalRenewals = succeededInvoices + failedInvoices;
-    const paymentFailureRate =
-      totalRenewals > 0 ? (failedInvoices / totalRenewals) * 100 : 0;
-
-    const planMix: PlanMixItemDto[] = Object.entries(planMixCounter).map(
-      ([name, count]) => ({ name, value: count }),
-    );
-
     return {
-      mrr: parseFloat(mrr.toFixed(2)),
-      activeSubscribers,
-      arpu: parseFloat(arpu.toFixed(2)),
-      churnRate: parseFloat(churnRate.toFixed(1)),
-      ltv: parseFloat(ltv.toFixed(2)),
-      planMix,
-      paymentFailureRate: parseFloat(paymentFailureRate.toFixed(1)),
+      mrr: 0,
+      activeSubscribers: 0,
+      arpu: 0,
+      churnRate: 0,
+      ltv: 0,
+      planMix: [],
+      paymentFailureRate: 0,
     };
   }
 
@@ -455,11 +403,21 @@ export class StripeService {
     }
 
     try {
+      const studio = await this.studioRepository.findOneBy({ id: studioId });
+      if (!studio || !studio.stripeAccountId) {
+        throw new BadRequestException(
+          'Studio not found or Stripe Connect account not configured for this studio.',
+        );
+      }
+
       const subscriptionParams: Stripe.SubscriptionCreateParams = {
         customer: customer.id,
         items: [{ price: priceId }],
         expand: ['latest_invoice.payment_intent'],
         payment_behavior: 'default_incomplete',
+        transfer_data: {
+          destination: studio.stripeAccountId,
+        },
       };
 
       if (!student.stripeSubscriptionId) {
@@ -482,12 +440,16 @@ export class StripeService {
         }
       }
 
-      const subscription =
-        await this.stripe.subscriptions.create(subscriptionParams);
+      const subscription = await this.stripe.subscriptions.create(
+        subscriptionParams,
+        {
+          stripeAccount: studio.stripeAccountId,
+        },
+      );
 
       student.stripeSubscriptionId = subscription.id;
       student.stripeSubscriptionStatus =
-        subscription.status as StripeSubscriptionDetails['status'];
+        subscription.status as StripeSubscriptionStatus;
 
       const plan = await this.membershipPlanRepository.findOne({
         where: { stripePriceId: priceId },
@@ -508,9 +470,6 @@ export class StripeService {
             .toISOString()
             .split('T')[0];
         } else {
-          this.logger.warn(
-            `Stripe subscription ${subscription.id} created, but current_period_start is invalid: ${(subscription as any).current_period_start}. Setting student membershipStartDate to null.`,
-          );
           student.membershipStartDate = null;
         }
 
@@ -524,17 +483,12 @@ export class StripeService {
             .toISOString()
             .split('T')[0];
         } else {
-          this.logger.warn(
-            `Stripe subscription ${subscription.id} created, but current_period_end is invalid: ${(subscription as any).current_period_end}. Setting student membershipRenewalDate to null.`,
-          );
           student.membershipRenewalDate = null;
         }
       } else {
         this.logger.warn(
           `No local membership plan found for Stripe Price ID: ${priceId}. Student internal membership details not fully updated.`,
         );
-        student.membershipStartDate = null;
-        student.membershipRenewalDate = null;
       }
 
       await this.studentRepository.save(student);
@@ -570,6 +524,29 @@ export class StripeService {
     }
   }
 
+  private mapStripeSubscriptionToDetails(
+    subscription: Stripe.Subscription,
+  ): StripeSubscriptionDetails {
+    const periodEnd = (subscription as any).current_period_end;
+    const periodEndNumber =
+      typeof periodEnd === 'number' && !isNaN(periodEnd) ? periodEnd : 0;
+
+    const customerId =
+      typeof subscription.customer === 'string'
+        ? subscription.customer
+        : subscription.customer.id;
+
+    return {
+      id: subscription.id,
+      status: subscription.status as StripeSubscriptionDetails['status'],
+      current_period_end: periodEndNumber,
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      stripeCustomerId: customerId,
+      items: subscription.items,
+      current_period_start: (subscription as any).current_period_start,
+    };
+  }
+
   async updateSubscription(
     subscriptionId: string,
     newPriceId: string,
@@ -579,10 +556,24 @@ export class StripeService {
       const student = await this.studentRepository.findOne({
         where: { stripeSubscriptionId: subscriptionId, studioId },
       });
-      const oldPlanName = student?.membershipPlanName || 'an unknown plan';
+      if (!student) {
+        throw new NotFoundException(
+          `Student with subscription ${subscriptionId} not found in this studio.`,
+        );
+      }
+      const oldPlanName = student.membershipPlanName || 'an unknown plan';
 
-      const subscription =
-        await this.stripe.subscriptions.retrieve(subscriptionId);
+      const studio = await this.studioRepository.findOneBy({ id: studioId });
+      if (!studio || !studio.stripeAccountId) {
+        throw new BadRequestException(
+          'Studio not found or Stripe Connect account not configured for this studio.',
+        );
+      }
+
+      const subscription = await this.stripe.subscriptions.retrieve(
+        subscriptionId,
+        { stripeAccount: studio.stripeAccountId },
+      );
       const updatedSubscription = await this.stripe.subscriptions.update(
         subscriptionId,
         {
@@ -595,9 +586,13 @@ export class StripeService {
             },
           ],
         },
+        { stripeAccount: studio.stripeAccountId },
       );
 
-      await this.handleSubscriptionUpdated(updatedSubscription);
+      await this.handleSubscriptionUpdated(
+        updatedSubscription,
+        studio.stripeAccountId,
+      );
 
       const newPlan = await this.membershipPlanRepository.findOne({
         where: { stripePriceId: newPriceId },
@@ -641,6 +636,61 @@ export class StripeService {
     }
   }
 
+  async handleSubscriptionUpdated(
+    updatedSubscription: Stripe.Subscription,
+    stripeAccountId: string,
+  ) {
+    const student = await this.studentRepository.findOne({
+      where: { stripeSubscriptionId: updatedSubscription.id },
+    });
+
+    if (!student) {
+      this.logger.warn(
+        `Received subscription update for ${updatedSubscription.id}, but no matching student found.`,
+      );
+      return;
+    }
+
+    const newPriceId = updatedSubscription.items.data[0]?.price.id;
+    if (!newPriceId) {
+      this.logger.error(
+        `Subscription ${updatedSubscription.id} has no price ID. Cannot update student plan.`,
+      );
+      return;
+    }
+
+    const newPlan = await this.membershipPlanRepository.findOne({
+      where: { stripePriceId: newPriceId },
+    });
+
+    if (newPlan) {
+      student.membershipPlanId = newPlan.id;
+      student.membershipPlanName = newPlan.name;
+      student.membershipType = newPlan.name;
+    } else {
+      this.logger.warn(
+        `No local plan found for Stripe price ${newPriceId}. Plan details for student ${student.id} might be out of sync.`,
+      );
+    }
+
+    student.stripeSubscriptionStatus =
+      updatedSubscription.status as StripeSubscriptionStatus;
+
+    const periodEnd = (updatedSubscription as any).current_period_end;
+    if (typeof periodEnd === 'number' && !isNaN(periodEnd)) {
+      student.membershipRenewalDate = new Date(periodEnd * 1000)
+        .toISOString()
+        .split('T')[0];
+    } else {
+      student.membershipRenewalDate = null;
+    }
+
+    await this.studentRepository.save(student);
+    this.logger.log(
+      `Successfully updated student ${student.id} from subscription ${updatedSubscription.id}.`,
+    );
+  }
+
   async updatePaymentMethod(
     studentId: string,
     paymentMethodId: string,
@@ -655,13 +705,25 @@ export class StripeService {
         `Stripe customer not found for student ID ${studentId}.`,
       );
     }
+
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Studio not found or Stripe Connect account not configured for this studio.',
+      );
+    }
+
     try {
       await this.stripe.paymentMethods.attach(paymentMethodId, {
         customer: student.stripeCustomerId,
       });
-      await this.stripe.customers.update(student.stripeCustomerId, {
-        invoice_settings: { default_payment_method: paymentMethodId },
-      });
+      await this.stripe.customers.update(
+        student.stripeCustomerId,
+        {
+          invoice_settings: { default_payment_method: paymentMethodId },
+        },
+        { stripeAccount: studio.stripeAccountId },
+      );
 
       this.notificationGateway.sendNotificationToStudio(student.studioId, {
         title: 'Payment Method Updated',
@@ -715,21 +777,35 @@ export class StripeService {
       );
     }
 
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Studio not found or Stripe Connect account not configured for this studio.',
+      );
+    }
+
     try {
       const canceledSubscription = await this.stripe.subscriptions.update(
         subscriptionId,
         {
           cancel_at_period_end: true,
         },
+        { stripeAccount: studio.stripeAccountId },
       );
 
       student.stripeSubscriptionStatus =
-        canceledSubscription.status as StripeSubscriptionDetails['status'];
+        canceledSubscription.status as StripeSubscriptionStatus;
       await this.studentRepository.save(student);
+
+      const periodEnd = (canceledSubscription as any).current_period_end;
+      const expiryDateString =
+        typeof periodEnd === 'number' && !isNaN(periodEnd)
+          ? new Date(periodEnd * 1000).toLocaleDateString()
+          : 'the end of the current period';
 
       this.notificationGateway.sendNotificationToStudio(student.studioId, {
         title: 'Subscription Canceled',
-        message: `... It will expire on ${new Date((canceledSubscription as any).current_period_end * 1000).toLocaleDateString()}.`,
+        message: `... It will expire on ${expiryDateString}.`,
         type: 'warning',
         link: `/billing`,
       });
@@ -776,13 +852,21 @@ export class StripeService {
       return null;
     }
 
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Studio not found or Stripe Connect account not configured for this studio.',
+      );
+    }
+
     try {
       const subscription = await this.stripe.subscriptions.retrieve(
         student.stripeSubscriptionId,
+        { stripeAccount: studio.stripeAccountId },
       );
 
       student.stripeSubscriptionStatus =
-        subscription.status as StripeSubscriptionDetails['status'];
+        subscription.status as StripeSubscriptionStatus;
 
       if (subscription.status === 'active') {
         if (
@@ -795,9 +879,7 @@ export class StripeService {
             .toISOString()
             .split('T')[0];
         } else {
-          this.logger.warn(
-            `Retrieved Stripe subscription ${subscription.id}, but current_period_start is invalid: ${(subscription as any).current_period_start}. Student membershipStartDate might be stale.`,
-          );
+          student.membershipStartDate = null;
         }
         if (
           typeof (subscription as any).current_period_end === 'number' &&
@@ -809,9 +891,7 @@ export class StripeService {
             .toISOString()
             .split('T')[0];
         } else {
-          this.logger.warn(
-            `Retrieved Stripe subscription ${subscription.id}, but current_period_end is invalid: ${(subscription as any).current_period_end}. Student membershipRenewalDate might be stale.`,
-          );
+          student.membershipRenewalDate = null;
         }
       }
 
@@ -849,14 +929,24 @@ export class StripeService {
       });
     }
 
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Studio not found or Stripe Connect account not configured for this studio.',
+      );
+    }
+
     try {
       this.logger.log(
         `Fetching Stripe payments for customer ID: ${student.stripeCustomerId}`,
       );
-      const paymentIntents = await this.stripe.paymentIntents.list({
-        customer: student.stripeCustomerId,
-        limit: 100,
-      });
+      const paymentIntents = await this.stripe.paymentIntents.list(
+        {
+          customer: student.stripeCustomerId,
+          limit: 100,
+        },
+        { stripeAccount: studio.stripeAccountId },
+      );
 
       const stripePayments: Payment[] = paymentIntents.data.map((pi) => {
         return {
@@ -883,8 +973,7 @@ export class StripeService {
       return stripePayments;
     } catch (error) {
       this.logger.error(
-        `Failed to fetch Stripe payments for customer ${student.stripeCustomerId}: ${(error as Error).message}`,
-        (error as Error).stack,
+        `Failed to fetch Stripe payments for customer ${student.stripeCustomerId}: ${(error as Error).stack}`,
       );
       return this.paymentRepository.find({
         where: { studentId },
@@ -897,28 +986,46 @@ export class StripeService {
     studentId: string,
     user: Partial<AdminUser>,
   ): Promise<Invoice[]> {
+    const studioId = user.studioId;
+    if (!studioId) {
+      throw new BadRequestException('User is not associated with a studio.');
+    }
+
     const student = await this.studentRepository.findOneBy({
       id: studentId,
-      studioId: user.studioId,
+      studioId: studioId,
     });
     if (!student) {
       throw new NotFoundException('Student not found in this studio.');
     }
 
     const localInvoices = await this.invoiceRepository.find({
-      where: { studentId, studioId: user.studioId },
+      where: { studentId, studioId: studioId },
       order: { issueDate: 'DESC' },
     });
 
     if (student.stripeCustomerId) {
+      const studio = await this.studioRepository.findOneBy({
+        id: studioId,
+      });
+      if (!studio || !studio.stripeAccountId) {
+        this.logger.warn(
+          `Studio ${studioId} not found or Stripe Connect account not configured. Cannot fetch Stripe invoices.`,
+        );
+        return localInvoices;
+      }
+
       try {
         this.logger.log(
-          `Fetching Stripe invoices for customer ID: ${student.stripeCustomerId}`,
+          `Fetching Stripe invoices for customer ID: ${student.stripeCustomerId} on connected account ${studio.stripeAccountId}`,
         );
-        const stripeInvoicesData = await this.stripe.invoices.list({
-          customer: student.stripeCustomerId,
-          limit: 100,
-        });
+        const stripeInvoicesData = await this.stripe.invoices.list(
+          {
+            customer: student.stripeCustomerId,
+            limit: 100,
+          },
+          { stripeAccount: studio.stripeAccountId },
+        );
 
         this.logger.log(
           `Found ${stripeInvoicesData.data.length} invoices on Stripe.`,
@@ -934,385 +1041,131 @@ export class StripeService {
     return localInvoices;
   }
 
-  async getInvoicePdfUrl(invoiceId: string): Promise<string | null> {
-    try {
-      const invoice = await this.stripe.invoices.retrieve(invoiceId);
-      if (invoice && invoice.invoice_pdf) {
-        return invoice.invoice_pdf;
-      }
-      this.logger.warn(
-        `Invoice PDF URL not found for Stripe Invoice ID: ${invoiceId}`,
+  async getInvoice(
+    invoiceId: string,
+    studioId: string,
+  ): Promise<Stripe.Invoice> {
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new BadRequestException(
+        'Studio not found or Stripe Connect account not configured for this studio.',
       );
-      return null;
+    }
+
+    try {
+      const invoice = await this.stripe.invoices.retrieve(invoiceId, {
+        stripeAccount: studio.stripeAccountId,
+      });
+      return invoice;
     } catch (error) {
       this.logger.error(
-        `Error retrieving Stripe Invoice ${invoiceId} for PDF URL: ${(error as Error).message}`,
+        `Failed to retrieve Stripe invoice ${invoiceId}: ${(error as Error).message}`,
         (error as Error).stack,
       );
       if ((error as Stripe.errors.StripeError).code === 'resource_missing') {
-        return null;
+        throw new NotFoundException(`Invoice with ID ${invoiceId} not found.`);
       }
       throw new InternalServerErrorException(
-        `Failed to retrieve invoice PDF URL: ${(error as Error).message}`,
+        'Could not fetch invoice details.',
       );
     }
   }
 
-  constructEvent(payload: string | any, sig: string | string[]): Stripe.Event {
-    const secret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!secret) {
-      throw new InternalServerErrorException('Webhook secret not configured.');
-    }
-
+  async getInvoicePdfUrl(
+    invoiceId: string,
+    studioId: string,
+  ): Promise<string | null> {
     try {
-      return this.stripe.webhooks.constructEvent(payload, sig, secret);
-    } catch (err) {
-      throw new BadRequestException(`Webhook error: ${(err as Error).message}`);
+      const invoice = await this.getInvoice(invoiceId, studioId);
+      return invoice.invoice_pdf ?? null;
+    } catch (error) {
+      this.logger.error(
+        `Could not retrieve PDF URL for invoice ${invoiceId}: ${error.message}`,
+      );
+      if (error instanceof NotFoundException) {
+        return null;
+      }
+      throw error;
     }
   }
 
-  async handleSubscriptionUpdated(
-    subscription: Stripe.Subscription,
-  ): Promise<void> {
-    const customerId = subscription.customer as string;
-    const stripeCustomer = await this.stripe.customers.retrieve(customerId);
-    const studioIdFromStripe = (stripeCustomer as any)?.metadata?.studio_id;
+  async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+    const invoiceData = invoice as any;
 
-    if (!studioIdFromStripe) {
-      this.logger.warn(
-        `Webhook: Stripe customer ${customerId} has no associated studio_id in metadata. Skipping subscription update.`,
-      );
+    const customerId = invoiceData.customer;
+    if (!customerId) {
+      this.logger.warn('Invoice payment succeeded event without customer ID.');
       return;
     }
 
-    const student = await this.studentRepository.findOne({
-      where: { stripeCustomerId: customerId, studioId: studioIdFromStripe },
+    const student = await this.studentRepository.findOneBy({
+      stripeCustomerId: customerId,
     });
-    if (student) {
-      student.stripeSubscriptionId = subscription.id;
-      student.stripeSubscriptionStatus =
-        subscription.status as StripeSubscriptionDetails['status'];
 
-      if (subscription.status === 'active') {
-        if (
-          typeof (subscription as any).current_period_start === 'number' &&
-          (subscription as any).current_period_start
-        ) {
-          student.membershipStartDate = new Date(
-            (subscription as any).current_period_start * 1000,
-          )
-            .toISOString()
-            .split('T')[0];
-        } else {
-          student.membershipStartDate = null;
-        }
-        if (
-          typeof (subscription as any).current_period_end === 'number' &&
-          (subscription as any).current_period_end
-        ) {
-          student.membershipRenewalDate = new Date(
-            (subscription as any).current_period_end * 1000,
-          )
-            .toISOString()
-            .split('T')[0];
-        } else {
-          student.membershipRenewalDate = null;
-        }
-
-        const stripePriceId = (subscription as any).items.data[0]?.price?.id;
-        if (stripePriceId) {
-          const plan = await this.membershipPlanRepository.findOne({
-            where: { stripePriceId },
-          });
-          if (plan) {
-            student.membershipPlanId = plan.id;
-            student.membershipType = plan.name;
-            student.membershipPlanName = plan.name;
-          } else {
-            this.logger.warn(
-              `Webhook: No local plan found for Stripe Price ID ${stripePriceId} during subscription update for student ${student.id}`,
-            );
-          }
-        }
-      } else if (
-        subscription.status === 'past_due' ||
-        subscription.status === 'unpaid'
-      ) {
-        this.notificationGateway.sendNotificationToStudio(student.studioId, {
-          title: 'Payment Overdue',
-          message: `Student ${student.firstName} ${student.lastName}'s subscription payment is overdue.`,
-          type: 'error',
-          link: `/billing`,
-        });
-      }
-      await this.studentRepository.save(student);
-      this.logger.log(
-        `Webhook: Updated subscription for student ${student.id} to ${subscription.status}`,
-      );
-
-      this.notificationGateway.broadcastDataUpdate(
-        'students',
-        {
-          updatedId: student.id,
-        },
-        student.studioId,
-      );
-      this.notificationGateway.broadcastDataUpdate(
-        'subscriptions',
-        {
-          studentId: student.id,
-        },
-        student.studioId,
-      );
-    } else {
+    if (!student) {
       this.logger.warn(
-        `Webhook: Received subscription update for unknown customer ${subscription.customer}`,
-      );
-    }
-  }
-
-  async handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
-    this.logger.log(
-      `Webhook: Invoice payment succeeded for invoice ID: ${invoice.id}`,
-    );
-    if (!invoice.customer) {
-      this.logger.warn(
-        `Webhook: Invoice ${invoice.id} paid but has no customer ID.`,
+        `Received invoice payment for unknown customer ID: ${customerId}`,
       );
       return;
     }
 
-    const isAuditionFee =
-      (invoice.lines.data[0] as any)?.price?.product === 'prod_ScZhhq6OolKX7V';
-
-    if (isAuditionFee) {
-      this.logger.log(
-        `Audition fee payment succeeded for invoice: ${invoice.id}`,
-      );
-
-      const customer = await this.stripe.customers.retrieve(
-        invoice.customer as string,
-      );
-      if (customer && !customer.deleted) {
-        this.logger.log(
-          `Audition prospect created: ${customer.name} (${customer.email})`,
-        );
-      }
-    } else {
-      const customerId = invoice.customer as string;
-      const stripeCustomer = await this.stripe.customers.retrieve(customerId);
-      const studioIdFromStripe = (stripeCustomer as any)?.metadata?.studio_id;
-
-      if (!studioIdFromStripe) {
-        this.logger.warn(
-          `Webhook: Stripe customer ${customerId} has no associated studio_id in metadata. Skipping invoice processing.`,
-        );
-        return;
-      }
-
-      const student = await this.studentRepository.findOne({
-        where: { stripeCustomerId: customerId, studioId: studioIdFromStripe },
-      });
-      if (!student) {
-        this.logger.warn(
-          `Webhook: Student not found for Stripe Customer ID ${invoice.customer} and studio ${studioIdFromStripe} from subscription invoice ${invoice.id}.`,
-        );
-        return;
-      }
-
-      const stripeSubscriptionId =
-        typeof (invoice as any).subscription === 'string'
-          ? (invoice as any).subscription
-          : null;
-      let localPlan: MembershipPlanDefinitionEntity | null = null;
-      let paymentMethodType: PaymentMethod = 'Stripe Subscription';
-
-      if (stripeSubscriptionId) {
-        const stripePriceId = (invoice.lines?.data[0] as any)?.price?.id;
-        if (stripePriceId) {
-          localPlan = await this.membershipPlanRepository.findOne({
-            where: { stripePriceId },
-          });
-          if (!localPlan) {
-            this.logger.warn(
-              `Webhook: Local plan not found for Stripe Price ID ${stripePriceId} from invoice ${invoice.id}.`,
-            );
-          }
-        }
-      } else {
-        paymentMethodType = 'Credit Card';
-      }
-
-      const invoiceItems: InvoiceItem[] = invoice.lines.data.map((line) => ({
-        id: line.id,
-        description: line.description || 'N/A',
-        quantity: line.quantity || 1,
-        unitPrice: (line as any).price?.unit_amount_decimal
-          ? parseFloat((line as any).price.unit_amount_decimal) / 100
-          : line.amount / 100 / (line.quantity || 1),
-        amount: line.amount / 100,
-      }));
-
-      const newLocalInvoice = this.invoiceRepository.create({
-        studentId: student.id,
-        studioId: student.studioId,
-        membershipPlanId: localPlan?.id || null,
-        membershipPlanName: localPlan?.name,
-        invoiceNumber:
-          invoice.number ||
-          `STRIPE-${(invoice.id || '').substring(0, 12).toUpperCase()}`,
-        issueDate: new Date(invoice.created * 1000).toISOString().split('T')[0],
-        dueDate: invoice.due_date
-          ? new Date(invoice.due_date * 1000).toISOString().split('T')[0]
-          : new Date(invoice.created * 1000).toISOString().split('T')[0],
-        items: invoiceItems,
-        subtotal: invoice.subtotal / 100,
-        taxAmount: (((invoice as any).tax as number) || 0) / 100,
-        totalAmount: invoice.total / 100,
-        amountPaid: invoice.amount_paid / 100,
-        amountDue: invoice.amount_due / 100,
-        status: (invoice as any).paid
-          ? 'Paid'
-          : ((invoice as any).status as InvoiceStatus) || 'Sent',
-        notes: `Stripe Invoice ID: ${invoice.id || 'N/A'}`,
-        stripeInvoiceId: invoice.id || undefined,
-      });
-      const savedLocalInvoice =
-        await this.invoiceRepository.save(newLocalInvoice);
-      this.logger.log(
-        `Webhook: Saved local invoice ${savedLocalInvoice.id} for Stripe invoice ${invoice.id}`,
-      );
-
-      if ((invoice as any).paid && (invoice as any).payment_intent) {
-        const paymentDateTimestamp =
-          (invoice as any).status_transitions.paid_at || invoice.created;
-        const paymentDate = new Date(paymentDateTimestamp * 1000)
-          .toISOString()
-          .split('T')[0];
-
-        const paymentIntent = (invoice as any).payment_intent;
-        const transactionId =
-          typeof paymentIntent === 'string' ? paymentIntent : paymentIntent?.id;
-
-        const newLocalPayment = this.paymentRepository.create({
-          studentId: student.id,
-          studioId: student.studioId,
-          membershipPlanId: localPlan?.id || null,
-          membershipPlanName: localPlan?.name,
-          amountPaid: invoice.amount_paid / 100,
-          paymentDate: paymentDate,
-          paymentMethod: paymentMethodType,
-          transactionId: transactionId,
-          invoiceId: savedLocalInvoice.id,
-          notes: `Payment for Stripe Invoice: ${invoice.id}`,
-        });
-        await this.paymentRepository.save(newLocalPayment);
-        this.logger.log(
-          `Webhook: Saved local payment for local invoice ${savedLocalInvoice.id}`,
-        );
-
-        this.notificationGateway.sendNotificationToStudio(student.studioId, {
-          title: 'Stripe Payment Succeeded',
-          message: `Received ${(invoice.amount_paid / 100).toFixed(2)} from ${student.firstName} ${student.lastName}.`,
-          type: 'success',
-          link: `/billing`,
-        });
-      }
-
-      if (stripeSubscriptionId) {
-        try {
-          const stripeSub =
-            await this.stripe.subscriptions.retrieve(stripeSubscriptionId);
-          if (
-            typeof (stripeSub as any).current_period_start === 'number' &&
-            (stripeSub as any).current_period_start
-          ) {
-            student.membershipStartDate = new Date(
-              (stripeSub as any).current_period_start * 1000,
-            )
-              .toISOString()
-              .split('T')[0];
-          } else {
-            student.membershipStartDate = null;
-          }
-          if (
-            typeof (stripeSub as any).current_period_end === 'number' &&
-            (stripeSub as any).current_period_end
-          ) {
-            student.membershipRenewalDate = new Date(
-              (stripeSub as any).current_period_end * 1000,
-            )
-              .toISOString()
-              .split('T')[0];
-          } else {
-            student.membershipRenewalDate = null;
-          }
-          student.stripeSubscriptionStatus =
-            stripeSub.status as StripeSubscriptionStatus;
-          if (localPlan) {
-            student.membershipPlanId = localPlan.id;
-            student.membershipType = localPlan.name;
-            student.membershipPlanName = localPlan.name;
-          }
-          await this.studentRepository.save(student);
-          this.logger.log(
-            `Webhook: Updated student ${student.id} membership dates from subscription ${stripeSubscriptionId}.`,
-          );
-
-          this.notificationGateway.broadcastDataUpdate(
-            'students',
-            {
-              updatedId: student.id,
-            },
-            student.studioId,
-          );
-          this.notificationGateway.broadcastDataUpdate(
-            'subscriptions',
-            {
-              studentId: student.id,
-            },
-            student.studioId,
-          );
-        } catch (subError) {
-          this.logger.error(
-            `Webhook: Error retrieving Stripe subscription ${stripeSubscriptionId} for student update: ${(subError as Error).message}`,
-            (subError as Error).stack,
-          );
-        }
-      }
+    const paymentIntentId = invoiceData.payment_intent;
+    if (!paymentIntentId) {
+      this.logger.warn(`Invoice ${invoiceData.id} has no payment_intent.`);
+      return;
     }
+
+    const newPayment = this.paymentRepository.create({
+      studentId: student.id,
+      studentName: `${student.firstName} ${student.lastName}`,
+      amountPaid: invoiceData.amount_paid / 100,
+      paymentDate: new Date(invoiceData.status_transitions.paid_at * 1000)
+        .toISOString()
+        .split('T')[0],
+      paymentMethod: 'Credit Card',
+      transactionId: paymentIntentId,
+      invoiceId: invoiceData.id,
+      studioId: student.studioId,
+      membershipPlanName:
+        invoiceData.lines.data[0]?.description || 'Monthly Subscription',
+    });
+
+    await this.paymentRepository.save(newPayment);
+    this.logger.log(
+      `Saved successful payment for student ${student.id} from invoice ${invoiceData.id}`,
+    );
+
+    this.notificationGateway.sendNotificationToStudio(student.studioId, {
+      title: 'Payment Succeeded',
+      message: `A payment of $${newPayment.amountPaid.toFixed(2)} was successfully processed for ${student.firstName} ${student.lastName}.`,
+      type: 'success',
+      link: `/billing/students/${student.id}`,
+    });
   }
 
-  async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-    this.logger.log(
-      `Webhook: Invoice payment failed for invoice ID: ${invoice.id}`,
+  public constructEvent(payload: Buffer, signature: string): Stripe.Event {
+    const webhookSecret = this.configService.get<string>(
+      'STRIPE_WEBHOOK_SECRET',
+    );
+    if (!webhookSecret) {
+      throw new Error(
+        'STRIPE_WEBHOOK_SECRET is not set in environment variables.',
+      );
+    }
+    return this.stripe.webhooks.constructEvent(
+      payload,
+      signature,
+      webhookSecret,
     );
   }
 
-  private mapStripeSubscriptionToDetails(
-    subscription: Stripe.Subscription,
-  ): StripeSubscriptionDetails {
-    const latestInvoice = (subscription as any)
-      .latest_invoice as Stripe.Invoice;
-    const paymentIntent =
-      ((latestInvoice as any)?.payment_intent as Stripe.PaymentIntent) || null;
+  async handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+    // Implement logic for failed payments
+    this.logger.warn(`Invoice payment failed: ${invoice.id}`);
+  }
 
-    return {
-      id: subscription.id,
-      stripeCustomerId: subscription.customer as string,
-      status: subscription.status as StripeSubscriptionDetails['status'],
-      items: {
-        data: (((subscription as any).items.data as any[]) || []).map(
-          (item: any) => ({
-            price: { id: item.price.id },
-            quantity: item.quantity,
-          }),
-        ),
-      },
-      current_period_start: (subscription as any).current_period_start,
-      current_period_end: (subscription as any).current_period_end,
-      cancel_at_period_end: (subscription as any).cancel_at_period_end,
-      clientSecret: paymentIntent?.client_secret || null,
-    };
+  async handleAccountUpdated(account: Stripe.Account) {
+    // Implement logic for account updates
+    this.logger.log(`Stripe Connect account updated: ${account.id}`);
   }
 }
