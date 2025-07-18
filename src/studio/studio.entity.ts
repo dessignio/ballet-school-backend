@@ -83,4 +83,5 @@ export class Studio {
   updatedAt: Date;
   scheduledClassSlots: any;
   schoolEvents: any;
+  stripeCustomerId: any;
 }

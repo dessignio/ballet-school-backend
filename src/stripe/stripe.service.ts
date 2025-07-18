@@ -37,6 +37,30 @@ import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 
 @Injectable()
 export class StripeService {
+  // Reemplaza tu método createCustomer actual con este:
+
+  async createCustomer(
+    directorName: string,
+    email: string,
+  ): Promise<Stripe.Customer> {
+    try {
+      const customer = await this.stripe.customers.create({
+        name: directorName,
+        email: email,
+        description: 'New Studio Sign-up',
+      });
+
+      // Esta línea es la que soluciona el problema, porque devuelve el objeto customer.
+      return customer;
+    } catch (error) {
+      this.logger.error(
+        `Failed to create Stripe customer for ${email}: ${(error as Error).message}`,
+      );
+      throw new InternalServerErrorException(
+        'Could not create Stripe customer.',
+      );
+    }
+  }
   private readonly stripe: Stripe;
   public readonly logger = new Logger(StripeService.name);
 

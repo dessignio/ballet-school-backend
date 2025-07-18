@@ -58,6 +58,7 @@ import { Prospect } from './prospect/prospect.entity'; // Added Prospect Entity
 import { Parent } from './parent/parent.entity';
 import { Studio } from './studio/studio.entity';
 import { StripeSettings } from './stripe/stripe-settings.entity';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [

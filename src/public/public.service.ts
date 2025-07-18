@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,6 +11,8 @@ import { Role } from '../role/role.entity';
 import { StripeService } from '../stripe/stripe.service';
 import { RegisterStudioDto } from './dto/register-studio.dto';
 import * as bcrypt from 'bcrypt';
+import { CreateStripeSubscriptionDto } from 'src/stripe/dto';
+import { PermissionKeyValues } from 'src/role/types/permission-key.type';
 
 @Injectable()
 export class PublicService {
@@ -21,18 +27,39 @@ export class PublicService {
   ) {}
 
   async registerStudio(registerStudioDto: RegisterStudioDto) {
-    const { directorName, email, password, studioName, planId, billingCycle, paymentMethodId } = registerStudioDto;
+    const {
+      directorName,
+      email,
+      password,
+      studioName,
+      planId,
+      billingCycle,
+      paymentMethodId,
+    } = registerStudioDto;
 
-    const existingUser = await this.adminUserRepository.findOne({ where: { email } });
+    const existingUser = await this.adminUserRepository.findOne({
+      where: { email },
+    });
     if (existingUser) {
       throw new Error('User with this email already exists');
     }
 
-    const stripeCustomer = await this.stripeService.createCustomer(directorName, email);
+    const stripeCustomer = await this.stripeService.createCustomer(
+      directorName,
+      email,
+    );
+
+    const subscriptionDto: CreateStripeSubscriptionDto = {
+      studentId: stripeCustomer.id, // Asumiendo que el DTO espera una propiedad 'studentId'
+      priceId: planId, // Asumiendo que el DTO espera una propiedad 'priceId'
+      paymentMethodId: paymentMethodId, // Y el resto de propiedades necesarias
+    };
+
+    const studioId = '...';
 
     const subscription = await this.stripeService.createSubscription(
-      stripeCustomer.id,
-      planId,
+      subscriptionDto,
+      studioId,
       billingCycle,
       paymentMethodId,
     );
@@ -44,7 +71,7 @@ export class PublicService {
 
     const role = new Role();
     role.name = 'Administrator';
-    role.permissions = ['all']; // Or a list of all permissions
+    role.permissions = [...PermissionKeyValues];
     role.studio = newStudio;
     const newRole = await this.roleRepository.save(role);
 

@@ -68,6 +68,8 @@ export class AdminUser {
 
   @UpdateDateColumn()
   updatedAt: Date;
+  name: string;
+  role: import('src/role/role.entity.ts').Role;
 
   @BeforeInsert()
   @BeforeUpdate()
