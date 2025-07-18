@@ -17,6 +17,10 @@ export class CreateStripeSubscriptionDto {
   @IsOptional()
   @IsString()
   existingStripeCustomerId?: string; // Optional: if student already has a Stripe Customer ID
+
+  @IsString()
+  @IsNotEmpty()
+  billingCycle: string;
 }
 
 export class ChangeStripeSubscriptionPlanDto {

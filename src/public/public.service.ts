@@ -50,9 +50,10 @@ export class PublicService {
     );
 
     const subscriptionDto: CreateStripeSubscriptionDto = {
-      studentId: stripeCustomer.id, // Asumiendo que el DTO espera una propiedad 'studentId'
-      priceId: planId, // Asumiendo que el DTO espera una propiedad 'priceId'
-      paymentMethodId: paymentMethodId, // Y el resto de propiedades necesarias
+      studentId: stripeCustomer.id,
+      priceId: planId,
+      paymentMethodId: paymentMethodId,
+      billingCycle: billingCycle,
     };
 
     const studioId = '...';
