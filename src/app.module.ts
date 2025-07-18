@@ -144,6 +144,7 @@ import { StripeSettings } from './stripe/stripe-settings.entity';
     PortalModule,
     SettingsModule,
     StudioModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [
