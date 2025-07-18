@@ -60,8 +60,6 @@ export class PublicService {
     const subscription = await this.stripeService.createSubscription(
       subscriptionDto,
       studioId,
-      billingCycle,
-      paymentMethodId,
     );
 
     const studio = new Studio();
