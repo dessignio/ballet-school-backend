@@ -49,23 +49,20 @@ export class PublicService {
       email,
     );
 
-    const subscriptionDto: CreateStripeSubscriptionDto = {
-      studentId: stripeCustomer.id, // Usas el ID del cliente que acabas de crear
-      priceId: planId, // Usas el planId del DTO de registro
-      paymentMethodId: paymentMethodId,
-      billingCycle: billingCycle,
-    };
-
     const studio = new Studio();
-
-    const subscription = await this.stripeService.createSubscription(
-      subscriptionDto,
-      studio.id,
-    );
-
     studio.name = studioName;
     studio.stripeCustomerId = stripeCustomer.id;
     const newStudio = await this.studioRepository.save(studio);
+
+    const subscription = await this.stripeService.createStudioSubscription(
+      stripeCustomer.id,
+      planId,
+      paymentMethodId,
+    );
+
+    newStudio.stripeSubscriptionId = subscription.id;
+    newStudio.subscriptionStatus = subscription.status;
+    await this.studioRepository.save(newStudio);
 
     const role = new Role();
     role.name = 'Administrator';

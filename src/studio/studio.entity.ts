@@ -81,7 +81,16 @@ export class Studio {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @Column({ name: 'stripe_customer_id', type: 'varchar', nullable: true })
+  stripeCustomerId: string | null;
+
+  @Column({ name: 'stripe_subscription_id', type: 'varchar', nullable: true })
+  stripeSubscriptionId: string | null;
+
+  @Column({ name: 'subscription_status', type: 'varchar', nullable: true })
+  subscriptionStatus: string | null;
+
   scheduledClassSlots: any;
   schoolEvents: any;
-  stripeCustomerId: any;
 }
