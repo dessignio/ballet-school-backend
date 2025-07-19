@@ -173,7 +173,7 @@ export class StripeService {
 
   // =================================================================
   // AQUÍ ESTÁ LA CORRECCIÓN:
-  // Reemplazamos 'getConnectAccountStatus' con la versión correcta 'getStudioStripeStatus'
+  // Reemplazamos 'getStudioStripeStatus' con la versión correcta 'getStudioStripeStatus'
   // que maneja los errores y devuelve el formato que el frontend espera.
   // =================================================================
   async getStudioStripeStatus(studioId: string) {

@@ -160,7 +160,7 @@ export class StripeController {
   @Get('connect/account-status')
   async getAccountStatus(@Req() req: Request) {
     const studioId = (req.user as JwtPayload).studioId;
-    return this.stripeService.getConnectAccountStatus(studioId);
+    return this.stripeService.getStudioStripeStatus(studioId);
   }
 
   @Get('students/:studentId/stripe-subscription')
