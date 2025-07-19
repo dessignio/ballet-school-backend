@@ -19,6 +19,8 @@ import { StripeSettings } from '../stripe/stripe-settings.entity';
 import { Prospect } from '../prospect/prospect.entity';
 import { Role } from '../role/role.entity';
 import { Payment } from '../payment/payment.entity';
+import { ScheduledClassSlot } from 'src/scheduled-class-slot/scheduled-class-slot.entity';
+import { SchoolEvent } from 'src/school-event/school-event.entity';
 
 @Entity('studios')
 export class Studio {
@@ -81,6 +83,12 @@ export class Studio {
 
   @OneToMany(() => Payment, (payment) => payment.studio)
   payments: Payment[];
+
+  @OneToMany(() => ScheduledClassSlot, (slot) => slot.studio)
+  scheduledClassSlots: ScheduledClassSlot[];
+
+  @OneToMany(() => SchoolEvent, (event) => event.studio)
+  schoolEvents: SchoolEvent[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
