@@ -171,6 +171,32 @@ export class StripeService {
     });
   }
 
+  async getConnectAccountStatus(studioId: string): Promise<any> {
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+
+    if (!studio || !studio.stripeAccountId) {
+      return { status: 'unverified' };
+    }
+
+    try {
+      const account = await this.stripe.accounts.retrieve(
+        studio.stripeAccountId,
+      );
+      if (account.details_submitted && account.payouts_enabled) {
+        return { status: 'active' };
+      } else {
+        return { status: 'incomplete' };
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to retrieve Stripe Connect account status for studio ${studioId}: ${(error as Error).message}`,
+      );
+      throw new InternalServerErrorException(
+        'Could not retrieve Stripe account status.',
+      );
+    }
+  }
+
   async createAuditionPaymentIntent(
     paymentDto: CreateAuditionPaymentDto,
     studioId: string,
