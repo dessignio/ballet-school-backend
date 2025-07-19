@@ -37,9 +37,6 @@ import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 
 @Injectable()
 export class StripeService {
-  getStudioStripeStatus(studioId: string) {
-    throw new Error('Method not implemented.');
-  }
   private readonly stripe: Stripe;
   public readonly logger = new Logger(StripeService.name);
 
@@ -174,25 +171,40 @@ export class StripeService {
     });
   }
 
-  async getConnectAccountStatus(studioId: string): Promise<any> {
+  // =================================================================
+  // AQUÍ ESTÁ LA CORRECCIÓN:
+  // Reemplazamos 'getConnectAccountStatus' con la versión correcta 'getStudioStripeStatus'
+  // que maneja los errores y devuelve el formato que el frontend espera.
+  // =================================================================
+  async getStudioStripeStatus(studioId: string) {
     const studio = await this.studioRepository.findOneBy({ id: studioId });
 
     if (!studio || !studio.stripeAccountId) {
-      return { status: 'unverified' };
+      throw new NotFoundException(
+        'Studio not found or not connected to Stripe.',
+      );
     }
 
     try {
       const account = await this.stripe.accounts.retrieve(
         studio.stripeAccountId,
       );
-      if (account.details_submitted && account.payouts_enabled) {
-        return { status: 'active' };
-      } else {
-        return { status: 'incomplete' };
+
+      let status: 'unverified' | 'incomplete' | 'active' = 'incomplete';
+      if (account.charges_enabled && account.payouts_enabled) {
+        status = 'active';
+      } else if (!account.details_submitted) {
+        status = 'unverified';
       }
+
+      return {
+        status: status,
+        details_submitted: account.details_submitted,
+        payouts_enabled: account.payouts_enabled,
+      };
     } catch (error) {
       this.logger.error(
-        `Failed to retrieve Stripe Connect account status for studio ${studioId}: ${(error as Error).message}`,
+        `Failed to retrieve Stripe account status for studio ${studioId}: ${(error as Error).message}`,
       );
       throw new InternalServerErrorException(
         'Could not retrieve Stripe account status.',
