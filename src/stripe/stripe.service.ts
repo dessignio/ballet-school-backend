@@ -37,6 +37,9 @@ import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 
 @Injectable()
 export class StripeService {
+  getStudioStripeStatus(studioId: string) {
+    throw new Error('Method not implemented.');
+  }
   private readonly stripe: Stripe;
   public readonly logger = new Logger(StripeService.name);
 
