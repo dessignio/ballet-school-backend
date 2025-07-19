@@ -1,6 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -11,8 +11,8 @@ import { Role } from '../role/role.entity';
 import { StripeService } from '../stripe/stripe.service';
 import { RegisterStudioDto } from './dto/register-studio.dto';
 import * as bcrypt from 'bcrypt';
-import { CreateStripeSubscriptionDto } from 'src/stripe/dto';
 import { PermissionKeyValues } from 'src/role/types/permission-key.type';
+import { CreateStripeSubscriptionDto } from 'src/stripe/dto';
 
 @Injectable()
 export class PublicService {
@@ -50,20 +50,19 @@ export class PublicService {
     );
 
     const subscriptionDto: CreateStripeSubscriptionDto = {
-      studentId: stripeCustomer.id,
-      priceId: planId,
+      studentId: stripeCustomer.id, // Usas el ID del cliente que acabas de crear
+      priceId: planId, // Usas el planId del DTO de registro
       paymentMethodId: paymentMethodId,
       billingCycle: billingCycle,
     };
 
-    const studioId = '...';
+    const studio = new Studio();
 
     const subscription = await this.stripeService.createSubscription(
       subscriptionDto,
-      studioId,
+      studio.id,
     );
 
-    const studio = new Studio();
     studio.name = studioName;
     studio.stripeCustomerId = stripeCustomer.id;
     const newStudio = await this.studioRepository.save(studio);
@@ -77,6 +76,7 @@ export class PublicService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const adminUser = new AdminUser();
+    adminUser.username = email; // Use email as username
     adminUser.name = directorName;
     adminUser.email = email;
     adminUser.password = hashedPassword;

@@ -106,6 +106,15 @@ export class AdminUserService {
     return user || undefined;
   }
 
+  async findByEmail(email: string): Promise<AdminUser | undefined> {
+    const user = await this.adminUserRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.email = :email', { email })
+      .getOne();
+    return user || undefined;
+  }
+
   async findOneWithPassword(id: string): Promise<AdminUser> {
     // This is for internal auth use and should not be filtered by studioId
     // to allow system-level operations if necessary.

@@ -15,10 +15,10 @@ export class AuthService {
   ) {}
 
   async validateUser(
-    username: string,
+    email: string,
     pass: string,
   ): Promise<SafeAdminUser | null> {
-    const user = await this.adminUserService.findByUsername(username);
+    const user = await this.adminUserService.findByEmail(email);
     if (user && (await user.validatePassword(pass))) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password, ...result } = user;
