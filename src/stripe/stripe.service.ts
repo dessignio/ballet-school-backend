@@ -37,30 +37,6 @@ import { InvoiceItem, InvoiceStatus } from 'src/invoice/invoice.types';
 
 @Injectable()
 export class StripeService {
-  // Reemplaza tu método createCustomer actual con este:
-
-  async createCustomer(
-    directorName: string,
-    email: string,
-  ): Promise<Stripe.Customer> {
-    try {
-      const customer = await this.stripe.customers.create({
-        name: directorName,
-        email: email,
-        description: 'New Studio Sign-up',
-      });
-
-      // Esta línea es la que soluciona el problema, porque devuelve el objeto customer.
-      return customer;
-    } catch (error) {
-      this.logger.error(
-        `Failed to create Stripe customer for ${email}: ${(error as Error).message}`,
-      );
-      throw new InternalServerErrorException(
-        'Could not create Stripe customer.',
-      );
-    }
-  }
   private readonly stripe: Stripe;
   public readonly logger = new Logger(StripeService.name);
 
@@ -87,6 +63,54 @@ export class StripeService {
       // @ts-ignore
       apiVersion: '2024-06-20',
     });
+  }
+
+  async createCustomer(name: string, email: string): Promise<Stripe.Customer> {
+    try {
+      const customer = await this.stripe.customers.create({
+        name: name,
+        email: email,
+      });
+      return customer;
+    } catch (error) {
+      this.logger.error(
+        `Failed to create Stripe customer for ${email}: ${(error as Error).message}`,
+      );
+      throw new InternalServerErrorException(
+        'Could not create Stripe customer.',
+      );
+    }
+  }
+
+  async createStudioSubscription(
+    customerId: string,
+    priceId: string,
+    paymentMethodId: string,
+  ): Promise<Stripe.Subscription> {
+    try {
+      await this.stripe.paymentMethods.attach(paymentMethodId, {
+        customer: customerId,
+      });
+
+      await this.stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      });
+
+      const subscription = await this.stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: priceId }],
+        expand: ['latest_invoice.payment_intent'],
+      });
+
+      return subscription;
+    } catch (error) {
+      this.logger.error(
+        `Failed to create studio subscription for customer ${customerId}: ${(error as Error).message}`,
+      );
+      throw new InternalServerErrorException(
+        'Could not create Stripe subscription.',
+      );
+    }
   }
 
   async createConnectAccount(studio: Studio): Promise<Studio> {
@@ -1610,37 +1634,6 @@ export class StripeService {
     } else {
       this.logger.warn(
         `Webhook: Received account.external_account.created for unknown studio_id ${studioIdFromStripe}.`,
-      );
-    }
-  }
-
-  async createStudioSubscription(
-    customerId: string,
-    priceId: string,
-    paymentMethodId: string,
-  ): Promise<Stripe.Subscription> {
-    try {
-      await this.stripe.paymentMethods.attach(paymentMethodId, {
-        customer: customerId,
-      });
-
-      await this.stripe.customers.update(customerId, {
-        invoice_settings: { default_payment_method: paymentMethodId },
-      });
-
-      const subscription = await this.stripe.subscriptions.create({
-        customer: customerId,
-        items: [{ price: priceId }],
-        expand: ['latest_invoice.payment_intent'],
-      });
-
-      return subscription;
-    } catch (error) {
-      this.logger.error(
-        `Failed to create studio subscription for customer ${customerId}: ${(error as Error).message}`,
-      );
-      throw new InternalServerErrorException(
-        'Could not create Stripe subscription.',
       );
     }
   }
