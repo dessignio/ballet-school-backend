@@ -140,7 +140,7 @@ export class StripeController {
     return this.stripeService.createConnectAccount(studio);
   }
 
-  @Get('connect/account-link')
+  @Post('connect/account-link')
   async createAccountLink(@Req() req: Request): Promise<{ url: string }> {
     const studioId = (req.user as JwtPayload).studioId;
     const studio = await this.stripeService.getStudioWithAdminUser(studioId);
