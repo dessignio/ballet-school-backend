@@ -7,6 +7,8 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RoleModule } from 'src/role/role.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Studio } from 'src/studio/studio.entity';
 
 export const jwtConstants = {
   // In a real app, this should be in an environment variable and much more complex.
@@ -22,6 +24,7 @@ export const jwtConstants = {
       signOptions: { expiresIn: '8h' }, // Token expires in 8 hours
     }),
     RoleModule,
+    TypeOrmModule.forFeature([Studio]),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
