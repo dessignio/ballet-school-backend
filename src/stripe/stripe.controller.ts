@@ -71,7 +71,6 @@ export class StripeController {
   logger: any;
   constructor(private readonly stripeService: StripeService) {}
 
-  @Public()
   @Post('create-audition-payment')
   createAuditionPaymentIntent(
     @Body() paymentDto: CreateAuditionPaymentDto,
