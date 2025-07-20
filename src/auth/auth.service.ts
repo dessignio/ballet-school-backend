@@ -1,7 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 // src/auth/auth.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   AdminUserService,
   SafeAdminUser,
@@ -13,7 +11,8 @@ import { Studio } from 'src/studio/studio.entity';
 
 @Injectable()
 export class AuthService {
-  logger: any;
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private adminUserService: AdminUserService,
     private jwtService: JwtService,
