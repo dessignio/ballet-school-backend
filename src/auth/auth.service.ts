@@ -42,9 +42,24 @@ export class AuthService {
       studioId: user.studioId,
       stripeAccountId: stripeAccountId, // Add stripeAccountId to the JWT payload
     };
+    const userForResponse = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      roleId: user.roleId,
+      roleName: user.role?.name, // Assuming role is loaded and has a name
+      status: user.status,
+      studioId: user.studioId,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      stripeAccountId: stripeAccountId, // Explicitly add stripeAccountId
+    };
+
     return {
       access_token: this.jwtService.sign(payload),
-      user: { ...user, stripeAccountId: stripeAccountId }, // Add stripeAccountId to the user object in the response
+      user: userForResponse, // Return the newly constructed user object
     };
   }
 }
