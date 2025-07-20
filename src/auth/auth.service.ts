@@ -33,13 +33,8 @@ export class AuthService {
     return null;
   }
 
-  // =================================================================
-  // ESTE ES EL MÉTODO CON LA LÓGICA ACTUALIZADA
-  // =================================================================
   async login(user: SafeAdminUser) {
-    // 1. Busca el estudio usando el studioId del usuario
     const studio = await this.studioRepository.findOneBy({ id: user.studioId });
-    // 2. Obtiene el stripeAccountId del estudio (o null si no existe)
     const stripeAccountId = studio ? studio.stripeAccountId : null;
 
     this.logger.log(
@@ -51,10 +46,9 @@ export class AuthService {
       sub: user.id,
       roleId: user.roleId,
       studioId: user.studioId,
-      stripeAccountId: stripeAccountId, // Añadido al payload del token JWT
+      stripeAccountId: stripeAccountId, // Añadido al payload del token
     };
 
-    // 3. Construye el objeto de usuario final para enviar al frontend
     const userForResponse = {
       id: user.id,
       username: user.username,
@@ -62,12 +56,12 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       roleId: user.roleId,
-      roleName: user.role?.name, // Asume que la relación 'role' se carga en findByEmail
+      roleName: user.role?.name,
       status: user.status,
       studioId: user.studioId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
-      stripeAccountId: stripeAccountId, // Añadido a la respuesta
+      stripeAccountId: stripeAccountId, // Añadido a la respuesta para el frontend
     };
 
     return {
