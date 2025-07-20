@@ -114,6 +114,24 @@ export class StripeService {
   }
 
   async createConnectAccount(studio: Studio): Promise<Studio> {
+    if (studio.stripeAccountId) {
+      this.logger.log(
+        `Studio ${studio.id} already has a Stripe Connect account: ${studio.stripeAccountId}. Attempting to retrieve existing account.`,
+      );
+      try {
+        await this.stripe.accounts.retrieve(studio.stripeAccountId);
+        this.logger.log(
+          `Existing Stripe account ${studio.stripeAccountId} is valid.`,
+        );
+        return studio; // Return the studio with its existing Stripe account ID
+      } catch (error) {
+        this.logger.warn(
+          `Existing Stripe account ${studio.stripeAccountId} for studio ${studio.id} is invalid or not found: ${(error as Error).message}. Attempting to create a new one.`,
+        );
+        // Proceed to create a new account if the existing one is invalid
+      }
+    }
+
     try {
       const account = await this.stripe.accounts.create({
         type: 'express',
@@ -130,7 +148,11 @@ export class StripeService {
       });
 
       studio.stripeAccountId = account.id;
-      return this.studioRepository.save(studio);
+      const savedStudio = await this.studioRepository.save(studio);
+      this.logger.log(
+        `Stripe Connect account created and saved for studio ${studio.id}. Account ID: ${savedStudio.stripeAccountId}`,
+      );
+      return savedStudio;
     } catch (error) {
       this.logger.error(
         `Failed to create Stripe Connect account for studio ${studio.id}: ${(error as Error).message}`,
@@ -143,6 +165,9 @@ export class StripeService {
   }
 
   async createAccountLink(stripeAccountId: string): Promise<string> {
+    this.logger.log(
+      `Attempting to create account link for Stripe Account ID: ${stripeAccountId}`,
+    );
     try {
       const accountLink = await this.stripe.accountLinks.create({
         account: stripeAccountId,
