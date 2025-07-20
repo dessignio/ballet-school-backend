@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 // src/auth/auth.service.ts
 import { Injectable } from '@nestjs/common';
 import {
@@ -11,6 +13,7 @@ import { Studio } from 'src/studio/studio.entity';
 
 @Injectable()
 export class AuthService {
+  logger: any;
   constructor(
     private adminUserService: AdminUserService,
     private jwtService: JwtService,
@@ -34,6 +37,9 @@ export class AuthService {
   async login(user: SafeAdminUser) {
     const studio = await this.studioRepository.findOneBy({ id: user.studioId });
     const stripeAccountId = studio ? studio.stripeAccountId : null;
+    this.logger.log(
+      `AuthService: Studio found: ${studio ? studio.id : 'none'}, Stripe Account ID: ${stripeAccountId}`,
+    ); // NEW LOG
 
     const payload = {
       username: user.username,
