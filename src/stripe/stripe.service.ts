@@ -179,10 +179,17 @@ export class StripeService {
   async getStudioStripeStatus(studioId: string) {
     const studio = await this.studioRepository.findOneBy({ id: studioId });
 
-    if (!studio || !studio.stripeAccountId) {
-      throw new NotFoundException(
-        'Studio not found or not connected to Stripe.',
-      );
+    if (!studio) {
+      throw new NotFoundException('Studio not found.');
+    }
+
+    if (!studio.stripeAccountId) {
+      // If studio exists but no Stripe Account ID, return a specific status
+      return {
+        status: 'unverified',
+        details_submitted: false,
+        payouts_enabled: false,
+      };
     }
 
     try {
@@ -197,10 +204,25 @@ export class StripeService {
         status = 'unverified';
       }
 
+      let dashboardUrl: string | undefined = undefined;
+      if (status === 'active') {
+        try {
+          const loginLink = await this.stripe.accounts.createLoginLink(
+            studio.stripeAccountId,
+          );
+          dashboardUrl = loginLink.url;
+        } catch (linkError) {
+          this.logger.error(
+            `Failed to create login link for active Stripe account ${studio.stripeAccountId}: ${(linkError as Error).message}`,
+          );
+        }
+      }
+
       return {
         status: status,
         details_submitted: account.details_submitted,
         payouts_enabled: account.payouts_enabled,
+        url: dashboardUrl,
       };
     } catch (error) {
       this.logger.error(
