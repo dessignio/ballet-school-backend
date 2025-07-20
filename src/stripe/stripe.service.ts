@@ -282,7 +282,9 @@ export class StripeService {
     }
 
     try {
-      const price = await this.stripe.prices.retrieve(auditionPriceId);
+      const price = await this.stripe.prices.retrieve(auditionPriceId, {
+        stripeAccount: studio.stripeAccountId,
+      });
       if (!price || !price.unit_amount) {
         throw new InternalServerErrorException(
           'Audition fee price not found or has no amount.',
