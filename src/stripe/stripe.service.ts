@@ -312,9 +312,6 @@ export class StripeService {
           automatic_payment_methods: {
             enabled: true,
           },
-          transfer_data: {
-            destination: studio.stripeAccountId,
-          },
         },
         { stripeAccount: studio.stripeAccountId },
       );
