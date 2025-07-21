@@ -305,9 +305,13 @@ export class StripeService {
 
       const customer = await this.stripe.customers.create(
         {
-          name: paymentDto.name,
+          name: `${paymentDto.firstName} ${paymentDto.lastName}`,
           email: paymentDto.email,
           description: 'Audition Prospect',
+          metadata: {
+            firstName: paymentDto.firstName,
+            lastName: paymentDto.lastName,
+          },
         },
         { stripeAccount: studio.stripeAccountId },
       );
