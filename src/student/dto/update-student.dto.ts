@@ -59,7 +59,7 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   dateOfBirth?: string;
 
   @IsOptional()
-  @IsEnum(['Masculino', 'Femenino', 'Otro', 'Prefiero no decirlo'], {
+  @IsEnum(['Male', 'Female', 'Other', 'Prefer not to say'], {
     message: 'Invalid gender value.',
   })
   gender?: Gender;
