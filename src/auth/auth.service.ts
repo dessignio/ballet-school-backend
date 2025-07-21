@@ -42,6 +42,8 @@ export class AuthService {
     // 2. Obtiene el stripeAccountId del estudio (o null si no existe)
     const stripeAccountId = studio ? studio.stripeAccountId : null;
 
+    console.log('DEBUG: Ejecutando bloque de log');
+
     this.logger.log(
       `AuthService: Studio found for user ${user.email}: ${studio ? studio.id : 'none'}, Stripe Account ID: ${stripeAccountId}`,
     );
