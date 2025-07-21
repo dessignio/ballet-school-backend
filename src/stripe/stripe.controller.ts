@@ -154,6 +154,14 @@ export class StripeController {
     return { url };
   }
 
+  @Get('connect/account-id')
+  async getConnectAccountId(
+    @Req() req: Request,
+  ): Promise<{ stripeAccountId: string }> {
+    const studioId = (req.user as JwtPayload).studioId;
+    return this.stripeService.getConnectAccountId(studioId);
+  }
+
   @Get('connect/account-status')
   async getAccountStatus(@Req() req: Request) {
     const studioId = (req.user as JwtPayload).studioId;

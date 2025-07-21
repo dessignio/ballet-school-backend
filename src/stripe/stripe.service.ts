@@ -189,6 +189,18 @@ export class StripeService {
     }
   }
 
+  async getConnectAccountId(
+    studioId: string,
+  ): Promise<{ stripeAccountId: string }> {
+    const studio = await this.studioRepository.findOneBy({ id: studioId });
+    if (!studio || !studio.stripeAccountId) {
+      throw new NotFoundException(
+        'Stripe Connect account not found for this studio.',
+      );
+    }
+    return { stripeAccountId: studio.stripeAccountId };
+  }
+
   async getStudioWithAdminUser(studioId: string): Promise<Studio | null> {
     return this.studioRepository.findOne({
       where: { id: studioId },
