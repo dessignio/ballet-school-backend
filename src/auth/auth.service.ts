@@ -64,7 +64,6 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       roleId: user.roleId,
-      roleName: user.role?.name, // Asume que la relación 'role' se carga en findByEmail
       status: user.status,
       studioId: user.studioId,
       createdAt: user.createdAt,
