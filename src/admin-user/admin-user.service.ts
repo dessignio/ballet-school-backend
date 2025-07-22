@@ -110,6 +110,7 @@ export class AdminUserService {
     const user = await this.adminUserRepository
       .createQueryBuilder('user')
       .addSelect('user.password')
+      .leftJoinAndSelect('user.studio', 'studio') // Load the studio relation
       .where('user.email = :email', { email })
       .getOne();
     return user || undefined;
