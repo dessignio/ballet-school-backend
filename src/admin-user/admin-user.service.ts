@@ -78,11 +78,18 @@ export class AdminUserService {
   }
 
   async findAll(studioId: string): Promise<SafeAdminUser[]> {
-    const users = await this.adminUserRepository.find({
-      where: { studio: { id: studioId } },
-      order: { username: 'ASC' },
-    });
-    return this.transformToSafeUsers(users);
+    console.log(`[AdminUserService] findAll called for studioId: ${studioId}`);
+    try {
+      const users = await this.adminUserRepository.find({
+        where: { studioId },
+        order: { username: 'ASC' },
+      });
+      console.log(`[AdminUserService] Found ${users.length} admin users.`);
+      return this.transformToSafeUsers(users);
+    } catch (error) {
+      console.error('[AdminUserService] Error in findAll:', error);
+      throw error;
+    }
   }
 
   async findOne(id: string, studioId: string): Promise<SafeAdminUser> {

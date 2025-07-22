@@ -30,9 +30,8 @@ export class Role {
   description?: string;
 
   @Column({
-    type: 'text', // In PostgreSQL, this maps to text[]
-    array: true,
-    default: () => "'{}'", // Default to an empty array
+    type: 'simple-array',
+    default: '',
   })
   permissions: PermissionKey[]; // Ensure this type aligns with what's stored
 

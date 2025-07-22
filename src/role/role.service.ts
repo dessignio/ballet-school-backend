@@ -31,10 +31,18 @@ export class RoleService {
   }
 
   async findAll(studioId: string): Promise<Role[]> {
-    return this.roleRepository.find({
-      where: { studioId },
-      order: { name: 'ASC' },
-    });
+    console.log(`[RoleService] findAll called for studioId: ${studioId}`);
+    try {
+      const roles = await this.roleRepository.find({
+        where: { studioId },
+        order: { name: 'ASC' },
+      });
+      console.log(`[RoleService] Found ${roles.length} roles.`);
+      return roles;
+    } catch (error) {
+      console.error('[RoleService] Error in findAll:', error);
+      throw error;
+    }
   }
 
   async findOne(id: string, studioId: string): Promise<Role> {
