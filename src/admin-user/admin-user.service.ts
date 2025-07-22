@@ -94,7 +94,7 @@ export class AdminUserService {
 
   async findOne(id: string, studioId: string): Promise<SafeAdminUser> {
     const user = await this.adminUserRepository.findOne({
-      where: { id, studio: { id: studioId } },
+      where: { id, studioId },
     });
     if (!user) {
       throw new NotFoundException(`Admin user with ID "${id}" not found`);
