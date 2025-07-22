@@ -110,6 +110,9 @@ import { PublicModule } from './public/public.module';
         // Para este entorno, forzamos la sincronización para crear las tablas faltantes.
         synchronize: true,
 
+        // Habilitar el registro de consultas
+        logging: true,
+
         // Activa SSL para la conexión a la base de datos solo en producción.
         ssl:
           configService.get<string>('NODE_ENV') === 'production'
