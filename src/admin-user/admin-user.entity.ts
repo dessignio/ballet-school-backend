@@ -12,32 +12,19 @@ import {
   UpdateDateColumn,
   BeforeInsert,
   BeforeUpdate,
-  ManyToOne,
-  JoinColumn,
-  Unique,
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { AdminUserStatus } from './types/admin-user-status.type';
-import { Studio } from '../studio/studio.entity';
 
-@Unique(['username', 'studioId'])
-@Unique(['email', 'studioId'])
 @Entity('admin_users')
 export class AdminUser {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @ManyToOne(() => Studio, (studio) => studio.adminUsers)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
-
-  @Column({ length: 100 })
+  @Column({ length: 100, unique: true })
   username: string;
 
-  @Column({ length: 100 })
+  @Column({ length: 100, unique: true })
   email: string;
 
   @Column({ length: 100 })

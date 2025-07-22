@@ -28,7 +28,6 @@ export class PortalAuthController {
     const user: ValidatedUser | null = await this.authService.validateUser(
       loginDto.username,
       loginDto.password,
-      loginDto.studioId,
     );
 
     if (!user) {
@@ -37,12 +36,7 @@ export class PortalAuthController {
 
     const token = await this.authService.login(user);
 
-    // CORRECCIÓN AQUÍ: Se añade user.studioId como tercer argumento
-    const profile = await this.portalService.getProfile(
-      user.id,
-      user.userType,
-      user.studioId,
-    );
+    const profile = await this.portalService.getProfile(user.id, user.userType);
 
     return {
       access_token: token.access_token,

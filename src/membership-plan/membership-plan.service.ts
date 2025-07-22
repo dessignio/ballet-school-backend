@@ -1,20 +1,23 @@
+/* eslint-disable @typescript-eslint/await-thenable */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   NotFoundException,
   ConflictException,
   InternalServerErrorException,
-  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MembershipPlanDefinitionEntity } from './membership-plan.entity';
 import { CreateMembershipPlanDto } from './dto/create-membership-plan.dto';
 import { UpdateMembershipPlanDto } from './dto/update-membership-plan.dto';
-import { StripeService } from 'src/stripe/stripe.service';
-import { AdminUser } from 'src/admin-user/admin-user.entity';
+import { StripeService } from 'src/stripe/stripe.service'; // Asegúrate de que la ruta sea correcta
 
 @Injectable()
 export class MembershipPlanService {
+  // BORRADO: Se eliminaron los métodos duplicados que estaban aquí.
+  // La clase ahora empieza directamente con el constructor.
+
   constructor(
     @InjectRepository(MembershipPlanDefinitionEntity)
     private planRepository: Repository<MembershipPlanDefinitionEntity>,
@@ -23,20 +26,15 @@ export class MembershipPlanService {
 
   async create(
     createPlanDto: CreateMembershipPlanDto,
-    user: Partial<AdminUser>,
   ): Promise<MembershipPlanDefinitionEntity> {
-    const studioId = user.studioId;
-    if (!studioId) {
-      throw new BadRequestException('User is not associated with a studio.');
-    }
-
     const existingPlanByName = await this.planRepository.findOne({
-      where: { name: createPlanDto.name, studioId },
+      where: { name: createPlanDto.name },
     });
 
     if (existingPlanByName) {
+      // CORREGIDO: Se quitó la barra invertida \ antes del backtick `
       throw new ConflictException(
-        `Membership plan with name "${createPlanDto.name}" already exists in this studio.`,
+        `Membership plan with name "${createPlanDto.name}" already exists.`,
       );
     }
 
@@ -60,6 +58,8 @@ export class MembershipPlanService {
           `Failed to create Stripe product/price for plan ${createPlanDto.name}:`,
           stripeError,
         );
+        // CORREGIDO: Lanzamos un error si Stripe falla. Esto soluciona el problema de
+        // "must return a value", ya que la función se detiene aquí en caso de error.
         throw new InternalServerErrorException(
           `Stripe error: ${(stripeError as Error).message}`,
         );
@@ -68,7 +68,6 @@ export class MembershipPlanService {
 
     const newPlanEntityData = {
       ...createPlanDto,
-      studioId,
       stripePriceId: stripePriceIdToSave,
     };
 
@@ -81,30 +80,21 @@ export class MembershipPlanService {
         `Database error saving plan ${createPlanDto.name}:`,
         dbError,
       );
+      // TODO: Considerar lógica para eliminar la entidad de Stripe si la BD falla.
       throw new InternalServerErrorException(
         `Could not save membership plan: ${(dbError as Error).message}`,
       );
     }
   }
 
-  async findAll(
-    user: Partial<AdminUser>,
-  ): Promise<MembershipPlanDefinitionEntity[]> {
-    return this.planRepository.find({
-      where: { studioId: user.studioId },
-      order: { name: 'ASC' },
-    });
+  async findAll(): Promise<MembershipPlanDefinitionEntity[]> {
+    return this.planRepository.find({ order: { name: 'ASC' } });
   }
 
-  async findOne(
-    id: string,
-    user: Partial<AdminUser>,
-  ): Promise<MembershipPlanDefinitionEntity> {
-    const plan = await this.planRepository.findOneBy({
-      id,
-      studioId: user.studioId,
-    });
+  async findOne(id: string): Promise<MembershipPlanDefinitionEntity> {
+    const plan = await this.planRepository.findOneBy({ id });
     if (!plan) {
+      // CORREGIDO: Se quitó la barra invertida \
       throw new NotFoundException(`Membership plan with ID "${id}" not found.`);
     }
     return plan;
@@ -113,14 +103,16 @@ export class MembershipPlanService {
   async update(
     id: string,
     updatePlanDto: UpdateMembershipPlanDto,
-    user: Partial<AdminUser>,
   ): Promise<MembershipPlanDefinitionEntity> {
+    // Usamos 'preload' para encontrar el plan y aplicar los cambios del DTO en un solo paso.
+    // Si el plan no existe, preload retorna undefined.
     const plan = await this.planRepository.preload({
       id: id,
       ...updatePlanDto,
     });
 
-    if (!plan || plan.studioId !== user.studioId) {
+    if (!plan) {
+      // CORREGIDO: Se quitó la barra invertida \
       throw new NotFoundException(
         `Membership plan with ID "${id}" not found to update.`,
       );
@@ -128,9 +120,10 @@ export class MembershipPlanService {
 
     if (updatePlanDto.name) {
       const existingPlanByName = await this.planRepository.findOne({
-        where: { name: updatePlanDto.name, studioId: user.studioId },
+        where: { name: updatePlanDto.name },
       });
       if (existingPlanByName && existingPlanByName.id !== id) {
+        // CORREGIDO: Se quitó la barra invertida \
         throw new ConflictException(
           `Another membership plan with name "${updatePlanDto.name}" already exists.`,
         );
@@ -140,15 +133,14 @@ export class MembershipPlanService {
     return this.planRepository.save(plan);
   }
 
-  async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    const result = await this.planRepository.delete({
-      id,
-      studioId: user.studioId,
-    });
+  async remove(id: string): Promise<void> {
+    const result = await this.planRepository.delete(id);
     if (result.affected === 0) {
+      // CORREGIDO: Se quitó la barra invertida \
       throw new NotFoundException(
         `Membership plan with ID "${id}" not found to delete.`,
       );
     }
+    // No se retorna nada porque la función es de tipo Promise<void>
   }
 }

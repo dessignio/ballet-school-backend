@@ -1,13 +1,5 @@
 // src/general-settings/general-settings.entity.ts
-import {
-  Entity,
-  Column,
-  PrimaryColumn,
-  UpdateDateColumn,
-  OneToOne,
-  JoinColumn,
-} from 'typeorm';
-import { Studio } from '../studio/studio.entity';
+import { Entity, Column, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
 // Define interfaces for JSONB columns to ensure type safety
 interface Address {
@@ -26,12 +18,9 @@ interface BusinessHour {
 
 @Entity('general_settings')
 export class GeneralSettings {
-  @PrimaryColumn({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @OneToOne(() => Studio)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
+  // Use a fixed ID since there will only ever be one row of settings
+  @PrimaryColumn({ type: 'varchar', default: 'current_settings' })
+  id: string;
 
   @Column({ type: 'varchar', length: 255 })
   academyName: string;

@@ -12,18 +12,12 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
-  UseGuards,
-  Req,
 } from '@nestjs/common';
 import { ProgramService } from './program.service';
 import { CreateProgramDto } from './dto/create-program.dto';
 import { UpdateProgramDto } from './dto/update-program.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Request } from 'express';
-import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 @Controller('programs')
-@UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -36,44 +30,31 @@ export class ProgramController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createProgramDto: CreateProgramDto, @Req() req: Request) {
-    // Apply type assertion
-    return this.programService.create(
-      createProgramDto,
-      req.user as Partial<AdminUser>,
-    );
+  create(@Body() createProgramDto: CreateProgramDto) {
+    return this.programService.create(createProgramDto);
   }
 
   @Get()
-  findAll(@Req() req: Request) {
-    // Apply type assertion
-    return this.programService.findAll(req.user as Partial<AdminUser>);
+  findAll() {
+    return this.programService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    // Apply type assertion
-    return this.programService.findOne(id, req.user as Partial<AdminUser>);
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.programService.findOne(id);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProgramDto: UpdateProgramDto,
-    @Req() req: Request,
   ) {
-    // Apply type assertion
-    return this.programService.update(
-      id,
-      updateProgramDto,
-      req.user as Partial<AdminUser>,
-    );
+    return this.programService.update(id, updateProgramDto);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    // Apply type assertion
-    return this.programService.remove(id, req.user as Partial<AdminUser>);
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.programService.remove(id);
   }
 }

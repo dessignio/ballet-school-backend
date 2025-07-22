@@ -11,77 +11,67 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
-  Query,
-  UseGuards,
-  Req,
+  Query, // Import Query decorator
 } from '@nestjs/common';
 import { AbsenceService } from './absence.service';
 import { CreateAbsenceDto, UpdateAbsenceDto } from './dto';
 import { Absence } from './absence.entity';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Request } from 'express';
-import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Controller('absences')
-@UseGuards(JwtAuthGuard)
 export class AbsenceController {
   constructor(private readonly absenceService: AbsenceService) {}
 
   @Post()
-  async create(
-    @Body() createAbsenceDto: CreateAbsenceDto,
-    @Req() req: Request,
-  ): Promise<Absence> {
-    // Aserción de tipo para confirmar a TypeScript que req.user existe y es compatible
-    return this.absenceService.create(
-      createAbsenceDto,
-      req.user as Partial<AdminUser>,
-    );
+  async create(@Body() createAbsenceDto: CreateAbsenceDto): Promise<Absence> {
+    // Basic validation could be added here if not using class-validator
+    if (
+      !createAbsenceDto.studentId ||
+      !createAbsenceDto.classId ||
+      !createAbsenceDto.reason
+    ) {
+      // throw new BadRequestException('Student ID, Class ID, and Reason are required.');
+    }
+    return this.absenceService.create(createAbsenceDto);
   }
 
+  // Optional: Endpoint to get all absences (e.g., for an admin panel)
   @Get()
-  async findAll(@Req() req: Request): Promise<Absence[]> {
-    return this.absenceService.findAll(req.user as Partial<AdminUser>);
+  async findAll(): Promise<Absence[]> {
+    return this.absenceService.findAll();
   }
 
+  // Optional: Endpoint to get absences for a specific student, potentially filtered by date
   @Get('student/:studentId')
   async findAllByStudent(
     @Param('studentId', ParseUUIDPipe) studentId: string,
-    @Req() req: Request,
-    @Query('date') date?: string,
+    @Query('date') date?: string, // Optional date query parameter (YYYY-MM-DD)
   ): Promise<Absence[]> {
-    return this.absenceService.findAllByStudent(
-      studentId,
-      req.user as Partial<AdminUser>,
-      date,
-    );
+    // Optional: Validate date format if provided
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      // throw new BadRequestException('Invalid date format. Please use YYYY-MM-DD.');
+      // For now, let's proceed, service might handle it or DB might ignore if 'Like' fails
+    }
+    return this.absenceService.findAllByStudent(studentId, date);
   }
 
   @Get(':id')
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
-  ): Promise<Absence> {
-    const absence = await this.absenceService.findOne(
-      id,
-      req.user as Partial<AdminUser>,
-    );
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<Absence> {
+    const absence = await this.absenceService.findOne(id);
     if (!absence) {
       throw new NotFoundException(`Absence with ID "${id}" not found`);
     }
     return absence;
   }
 
+  // Optional: Endpoint to update an absence (e.g., for an admin to mark as 'Justificada')
   @Patch(':id')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateAbsenceDto: UpdateAbsenceDto,
-    @Req() req: Request,
   ): Promise<Absence> {
     const updatedAbsence = await this.absenceService.update(
       id,
       updateAbsenceDto,
-      req.user as Partial<AdminUser>,
     );
     if (!updatedAbsence) {
       throw new NotFoundException(
@@ -93,10 +83,13 @@ export class AbsenceController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
-  ): Promise<void> {
-    await this.absenceService.remove(id, req.user as Partial<AdminUser>);
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    const absence = await this.absenceService.findOne(id);
+    if (!absence) {
+      throw new NotFoundException(
+        `Absence with ID "${id}" not found to delete`,
+      );
+    }
+    await this.absenceService.remove(id);
   }
 }

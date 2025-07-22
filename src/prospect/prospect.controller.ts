@@ -1,4 +1,3 @@
-// src/prospect/prospect.controller.ts
 import {
   Controller,
   Get,
@@ -12,8 +11,6 @@ import {
   ParseUUIDPipe,
   UsePipes,
   ValidationPipe,
-  UseGuards,
-  Req,
 } from '@nestjs/common';
 import { ProspectService } from './prospect.service';
 import {
@@ -21,18 +18,7 @@ import {
   UpdateProspectDto,
   ApproveProspectDto,
 } from './dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Request } from 'express';
 
-// Definimos un tipo que representa la estructura del payload del token JWT
-interface JwtPayload {
-  userId: string;
-  username: string;
-  roleId: string;
-  studioId: string;
-}
-
-@UseGuards(JwtAuthGuard)
 @Controller('prospects')
 @UsePipes(
   new ValidationPipe({
@@ -45,53 +31,39 @@ export class ProspectController {
   constructor(private readonly prospectService: ProspectService) {}
 
   @Post()
-  create(@Body() createProspectDto: CreateProspectDto, @Req() req: Request) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.prospectService.create(createProspectDto, studioId);
+  create(@Body() createProspectDto: CreateProspectDto) {
+    return this.prospectService.create(createProspectDto);
   }
 
   @Get()
-  findAll(@Req() req: Request) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.prospectService.findAll(studioId);
+  findAll() {
+    return this.prospectService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.prospectService.findOne(id, studioId);
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.prospectService.findOne(id);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProspectDto: UpdateProspectDto,
-    @Req() req: Request,
   ) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.prospectService.update(id, updateProspectDto, studioId);
+    return this.prospectService.update(id, updateProspectDto);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.prospectService.remove(id, studioId);
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.prospectService.remove(id);
   }
 
   @Post(':id/approve')
   approve(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() approveDto: ApproveProspectDto,
-    @Req() req: Request,
   ) {
-    const studioId = (req.user as JwtPayload).studioId;
-    // CORRECCIÓN: Pasamos el objeto req.user al servicio
-    return this.prospectService.approve(
-      id,
-      approveDto,
-      studioId,
-      req.user as JwtPayload,
-    );
+    return this.prospectService.approve(id, approveDto);
   }
 }

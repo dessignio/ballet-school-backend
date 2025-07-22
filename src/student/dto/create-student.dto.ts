@@ -89,7 +89,7 @@ export class CreateStudentDto {
   dateOfBirth: string;
 
   @IsOptional()
-  @IsEnum(['Male', 'Female', 'Other', 'Prefer not to say'], {
+  @IsEnum(['Masculino', 'Femenino', 'Otro', 'Prefiero no decirlo'], {
     message: 'Invalid gender value.',
   })
   gender?: Gender;
@@ -174,7 +174,4 @@ export class CreateStudentDto {
   @IsOptional()
   @IsUUID('4', { message: 'Parent ID must be a valid UUID.' })
   parentId?: string | null;
-
-  @IsUUID('4', { message: 'Studio ID must be a valid UUID.' })
-  studioId: string;
 }

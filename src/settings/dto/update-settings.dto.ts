@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // backend/settings/dto/update-settings.dto.ts
 import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 

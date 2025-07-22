@@ -5,11 +5,8 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
 import { ProgramName } from './types/program-name.type';
-import { Studio } from '../studio/studio.entity';
 
 // This interface is for type-hinting the structure within the JSONB column
 // It's not a separate TypeORM entity in this simplified setup.
@@ -25,13 +22,6 @@ export interface InstructorAvailabilitySlotEmbed {
 export class Instructor {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @ManyToOne(() => Studio, (studio) => studio.instructors)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
 
   @Column({ length: 100 })
   firstName: string;

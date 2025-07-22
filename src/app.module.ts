@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -34,7 +35,6 @@ import { ParentModule } from './parent/parent.module';
 import { PortalAuthModule } from './portal-auth/portal-auth.module';
 import { PortalModule } from './portal/portal.module';
 import { SettingsModule } from './settings/settings.module';
-import { StudioModule } from './studio/studio.module';
 
 // ========= ¡AQUÍ ESTÁ TU BLOQUE DE IMPORTACIÓN DE ENTIDADES! =========
 import { Student } from './student/student.entity';
@@ -56,9 +56,6 @@ import { GeneralSettings } from './general-settings/general-settings.entity';
 import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
 import { Prospect } from './prospect/prospect.entity'; // Added Prospect Entity
 import { Parent } from './parent/parent.entity';
-import { Studio } from './studio/studio.entity';
-import { StripeSettings } from './stripe/stripe-settings.entity';
-import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
@@ -101,17 +98,12 @@ import { PublicModule } from './public/public.module';
           CalendarSettings,
           Prospect,
           Parent,
-          Studio,
-          StripeSettings,
         ],
 
         // Sincroniza la base de datos.
         // ADVERTENCIA: En producción, es más seguro usar migraciones.
         // Para este entorno, forzamos la sincronización para crear las tablas faltantes.
         synchronize: true,
-
-        // Habilitar el registro de consultas
-        logging: true,
 
         // Activa SSL para la conexión a la base de datos solo en producción.
         ssl:
@@ -147,8 +139,6 @@ import { PublicModule } from './public/public.module';
     PortalAuthModule,
     PortalModule,
     SettingsModule,
-    StudioModule,
-    PublicModule,
   ],
   controllers: [AppController],
   providers: [

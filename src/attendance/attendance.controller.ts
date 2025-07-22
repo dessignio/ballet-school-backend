@@ -11,19 +11,13 @@ import {
   ValidationPipe,
   HttpCode,
   HttpStatus,
-  BadRequestException,
-  UseGuards,
-  Req,
+  BadRequestException, // Import BadRequestException
 } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { CreateAttendanceDto, BulkMarkAttendanceDto } from './dto';
 import { AttendanceRecord } from './attendance.entity';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Request } from 'express';
-import { AdminUser } from 'src/admin-user/admin-user.entity'; // Importar AdminUser
 
 @Controller('attendance')
-@UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -37,52 +31,34 @@ export class AttendanceController {
   @Get()
   async findByClassAndDate(
     @Query('classOfferingId', ParseUUIDPipe) classOfferingId: string,
-    @Query('date') date: string,
-    @Req() req: Request,
+    @Query('date') date: string, // Expects YYYY-MM-DD format
   ): Promise<AttendanceRecord[]> {
     if (!date) {
       throw new BadRequestException('Date parameter is required.');
     }
-    // Aplicar aserción de tipo
-    return this.attendanceService.findByClassAndDate(
-      classOfferingId,
-      date,
-      req.user as Partial<AdminUser>,
-    );
+    return this.attendanceService.findByClassAndDate(classOfferingId, date);
   }
 
   @Get(':id')
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
   ): Promise<AttendanceRecord> {
-    // Aplicar aserción de tipo
-    return this.attendanceService.findOne(id, req.user as Partial<AdminUser>);
+    return this.attendanceService.findOne(id);
   }
 
   @Post()
-  @HttpCode(HttpStatus.OK)
+  @HttpCode(HttpStatus.OK) // Upsert returns 200 if successful update, 201 if new created (can be unified to 200 for simplicity)
   async upsertAttendance(
     @Body() createAttendanceDto: CreateAttendanceDto,
-    @Req() req: Request,
   ): Promise<AttendanceRecord> {
-    // Aplicar aserción de tipo
-    return this.attendanceService.upsertAttendance(
-      createAttendanceDto,
-      req.user as Partial<AdminUser>,
-    );
+    return this.attendanceService.upsertAttendance(createAttendanceDto);
   }
 
   @Post('bulk')
   @HttpCode(HttpStatus.OK)
   async bulkUpsertAttendance(
     @Body() bulkDto: BulkMarkAttendanceDto,
-    @Req() req: Request,
   ): Promise<AttendanceRecord[]> {
-    // Aplicar aserción de tipo
-    return this.attendanceService.bulkUpsertAttendance(
-      bulkDto.records,
-      req.user as Partial<AdminUser>,
-    );
+    return this.attendanceService.bulkUpsertAttendance(bulkDto.records);
   }
 }

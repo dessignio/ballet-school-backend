@@ -46,11 +46,7 @@ export class AuthController {
     let permissions: string[] = [];
     if (safeUser.roleId) {
       try {
-        // CORRECCIÓN AQUÍ: Se añade safeUser.studioId a la llamada
-        const role: Role = await this.roleService.findOne(
-          safeUser.roleId,
-          safeUser.studioId,
-        );
+        const role: Role = await this.roleService.findOne(safeUser.roleId);
         if (role && role.permissions) {
           permissions = role.permissions;
         }

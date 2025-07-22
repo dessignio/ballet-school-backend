@@ -6,26 +6,16 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
 import { ScheduledClassSlot } from 'src/scheduled-class-slot/scheduled-class-slot.entity';
 import { ProgramName } from 'src/program/types/program-name.type';
 import { DancerLevelName } from 'src/program/types/dancer-level-name.type';
 import { StudentGeneralLevel } from 'src/student/types/student-general-level.type';
-import { Studio } from '../studio/studio.entity';
 
 @Entity('class_offerings')
 export class ClassOffering {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @ManyToOne(() => Studio, (studio) => studio.classOfferings)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
 
   @Column({ length: 255 })
   name: string;

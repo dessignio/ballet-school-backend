@@ -17,56 +17,39 @@ export class RoleService {
     private roleRepository: Repository<Role>,
   ) {}
 
-  async create(createRoleDto: CreateRoleDto, studioId: string): Promise<Role> {
+  async create(createRoleDto: CreateRoleDto): Promise<Role> {
     const existingRole = await this.roleRepository.findOne({
-      where: { name: createRoleDto.name, studioId },
+      where: { name: createRoleDto.name },
     });
     if (existingRole) {
       throw new ConflictException(
-        `Role with name "${createRoleDto.name}" already exists in this studio.`,
+        `Role with name "${createRoleDto.name}" already exists.`,
       );
     }
-    const newRole = this.roleRepository.create({ ...createRoleDto, studioId });
+    const newRole = this.roleRepository.create(createRoleDto);
     return this.roleRepository.save(newRole);
   }
 
-  async findAll(studioId: string): Promise<Role[]> {
-    console.log(`[RoleService] findAll called for studioId: ${studioId}`);
-    try {
-      const roles = await this.roleRepository.find({
-        where: { studioId },
-        order: { name: 'ASC' },
-      });
-      console.log(`[RoleService] Found ${roles.length} roles.`);
-      return roles;
-    } catch (error) {
-      console.error('[RoleService] Error in findAll:', error);
-      throw error;
-    }
+  async findAll(): Promise<Role[]> {
+    return this.roleRepository.find({ order: { name: 'ASC' } });
   }
 
-  async findOne(id: string, studioId: string): Promise<Role> {
-    const role = await this.roleRepository.findOneBy({ id, studioId });
+  async findOne(id: string): Promise<Role> {
+    const role = await this.roleRepository.findOneBy({ id });
     if (!role) {
-      throw new NotFoundException(
-        `Role with ID "${id}" not found in this studio`,
-      );
+      throw new NotFoundException(`Role with ID "${id}" not found`);
     }
     return role;
   }
 
-  async update(
-    id: string,
-    updateRoleDto: UpdateRoleDto,
-    studioId: string,
-  ): Promise<Role> {
+  async update(id: string, updateRoleDto: UpdateRoleDto): Promise<Role> {
     if (updateRoleDto.name) {
       const existingRoleWithSameName = await this.roleRepository.findOne({
-        where: { name: updateRoleDto.name, studioId },
+        where: { name: updateRoleDto.name },
       });
       if (existingRoleWithSameName && existingRoleWithSameName.id !== id) {
         throw new ConflictException(
-          `Another role with name "${updateRoleDto.name}" already exists in this studio.`,
+          `Another role with name "${updateRoleDto.name}" already exists.`,
         );
       }
     }
@@ -75,21 +58,17 @@ export class RoleService {
       id: id,
       ...updateRoleDto,
     });
-    if (!role || role.studioId !== studioId) {
-      throw new NotFoundException(
-        `Role with ID "${id}" not found in this studio to update`,
-      );
+    if (!role) {
+      throw new NotFoundException(`Role with ID "${id}" not found to update`);
     }
     return this.roleRepository.save(role);
   }
 
-  async remove(id: string, studioId: string): Promise<void> {
+  async remove(id: string): Promise<void> {
     // TODO: Add logic to check if any admin users are assigned this role before deletion
-    const result = await this.roleRepository.delete({ id, studioId });
+    const result = await this.roleRepository.delete(id);
     if (result.affected === 0) {
-      throw new NotFoundException(
-        `Role with ID "${id}" not found in this studio to delete`,
-      );
+      throw new NotFoundException(`Role with ID "${id}" not found to delete`);
     }
   }
 }

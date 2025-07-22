@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/unbound-method */
 /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -41,35 +40,37 @@ export class AdminUserService {
     return users.map((user) => this.transformToSafeUser(user));
   }
 
-  async create(
-    createAdminUserDto: CreateAdminUserDto,
-    studioId: string,
-  ): Promise<SafeAdminUser> {
-    const { username, email } = createAdminUserDto;
+  async create(createAdminUserDto: CreateAdminUserDto): Promise<SafeAdminUser> {
+    const { username, email, roleId } = createAdminUserDto;
 
     const existingByUsername = await this.adminUserRepository.findOne({
-      where: { username, studio: { id: studioId } },
+      where: { username },
     });
     if (existingByUsername) {
       throw new ConflictException(`Username "${username}" already exists.`);
     }
 
     const existingByEmail = await this.adminUserRepository.findOne({
-      where: { email, studio: { id: studioId } },
+      where: { email },
     });
     if (existingByEmail) {
       throw new ConflictException(`Email "${email}" already exists.`);
     }
 
+    // Optional: Validate roleId if Role entity/repository is available
+    // const roleExists = await this.roleRepository.findOneBy({ id: roleId });
+    // if (!roleExists) {
+    //   throw new NotFoundException(`Role with ID "${roleId}" not found.`);
+    // }
+
     try {
-      const adminUser = this.adminUserRepository.create({
-        ...createAdminUserDto,
-        studio: { id: studioId },
-      });
+      const adminUser = this.adminUserRepository.create(createAdminUserDto);
       const savedUser = await this.adminUserRepository.save(adminUser);
       return this.transformToSafeUser(savedUser);
     } catch (error) {
+      // Catch potential DB constraint errors not caught by prior checks (e.g., race conditions)
       if (error.code === '23505') {
+        // PostgreSQL unique violation
         throw new ConflictException('Username or email already exists.');
       }
       console.error('Error creating admin user:', error);
@@ -77,25 +78,15 @@ export class AdminUserService {
     }
   }
 
-  async findAll(studioId: string): Promise<SafeAdminUser[]> {
-    console.log(`[AdminUserService] findAll called for studioId: ${studioId}`);
-    try {
-      const users = await this.adminUserRepository.find({
-        where: { studioId },
-        order: { username: 'ASC' },
-      });
-      console.log(`[AdminUserService] Found ${users.length} admin users.`);
-      return this.transformToSafeUsers(users);
-    } catch (error) {
-      console.error('[AdminUserService] Error in findAll:', error);
-      throw error;
-    }
+  async findAll(): Promise<SafeAdminUser[]> {
+    const users = await this.adminUserRepository.find({
+      order: { username: 'ASC' },
+    });
+    return this.transformToSafeUsers(users);
   }
 
-  async findOne(id: string, studioId: string): Promise<SafeAdminUser> {
-    const user = await this.adminUserRepository.findOne({
-      where: { id, studioId },
-    });
+  async findOne(id: string): Promise<SafeAdminUser> {
+    const user = await this.adminUserRepository.findOneBy({ id });
     if (!user) {
       throw new NotFoundException(`Admin user with ID "${id}" not found`);
     }
@@ -103,29 +94,18 @@ export class AdminUserService {
   }
 
   async findByUsername(username: string): Promise<AdminUser | undefined> {
-    // This method remains global for authentication purposes, assuming usernames are globally unique for login.
-    // If usernames only need to be unique per studio, a studioId parameter would be required.
     const user = await this.adminUserRepository
       .createQueryBuilder('user')
-      .addSelect('user.password')
+      .addSelect('user.password') // Explicitly select the password
       .where('user.username = :username', { username })
       .getOne();
-    return user || undefined;
-  }
 
-  async findByEmail(email: string): Promise<AdminUser | undefined> {
-    const user = await this.adminUserRepository
-      .createQueryBuilder('user')
-      .addSelect('user.password')
-      .addSelect('user.studioId') // Explicitly select studioId
-      .where('user.email = :email', { email })
-      .getOne();
+    // Si getOne() devuelve null, retornamos undefined para cumplir con la firma.
     return user || undefined;
   }
 
   async findOneWithPassword(id: string): Promise<AdminUser> {
-    // This is for internal auth use and should not be filtered by studioId
-    // to allow system-level operations if necessary.
+    // For internal auth use
     const user = await this.adminUserRepository
       .createQueryBuilder('user')
       .select('user')
@@ -141,39 +121,50 @@ export class AdminUserService {
   async update(
     id: string,
     updateAdminUserDto: UpdateAdminUserDto,
-    studioId: string,
   ): Promise<SafeAdminUser> {
-    const userToUpdate = await this.adminUserRepository.findOne({
-      where: { id, studio: { id: studioId } },
-    });
+    const userToUpdate = await this.adminUserRepository.findOneBy({ id });
     if (!userToUpdate) {
       throw new NotFoundException(
         `Admin user with ID "${id}" not found to update.`,
       );
     }
 
-    const { username, email } = updateAdminUserDto;
-    if (username && username !== userToUpdate.username) {
+    const usernameFromDto = updateAdminUserDto.username;
+    if (usernameFromDto && usernameFromDto !== userToUpdate.username) {
       const existingByUsername = await this.adminUserRepository.findOne({
-        where: { username, studio: { id: studioId } },
+        where: { username: usernameFromDto },
       });
       if (existingByUsername) {
-        throw new ConflictException(`Username "${username}" already exists.`);
+        throw new ConflictException(
+          `Username "${usernameFromDto}" already exists.`,
+        );
       }
     }
 
-    if (email && email !== userToUpdate.email) {
+    const emailFromDto = updateAdminUserDto.email;
+    if (emailFromDto && emailFromDto !== userToUpdate.email) {
       const existingByEmail = await this.adminUserRepository.findOne({
-        where: { email, studio: { id: studioId } },
+        where: { email: emailFromDto },
       });
       if (existingByEmail) {
-        throw new ConflictException(`Email "${email}" already exists.`);
+        throw new ConflictException(`Email "${emailFromDto}" already exists.`);
       }
     }
 
+    // const roleIdFromDto = updateAdminUserDto.roleId;
+    // Optional: Validate roleId if provided
+    // if (roleIdFromDto) {
+    //   const roleExists = await this.roleRepository.findOneBy({ id: roleIdFromDto });
+    //   if (!roleExists) {
+    //     throw new NotFoundException(`Role with ID "${roleIdFromDto}" not found.`);
+    //   }
+    // }
+
+    // Merge existing user with DTO. `preload` handles this well.
+    // If DTO has password, entity's BeforeUpdate hook will hash it.
     const updatedUserPartial = await this.adminUserRepository.preload({
       id: id,
-      ...updateAdminUserDto,
+      ...updateAdminUserDto, // Spread all properties from DTO
     });
 
     if (!updatedUserPartial) {
@@ -196,11 +187,8 @@ export class AdminUserService {
     }
   }
 
-  async remove(id: string, studioId: string): Promise<void> {
-    const result = await this.adminUserRepository.delete({
-      id,
-      studio: { id: studioId },
-    });
+  async remove(id: string): Promise<void> {
+    const result = await this.adminUserRepository.delete(id);
     if (result.affected === 0) {
       throw new NotFoundException(
         `Admin user with ID "${id}" not found to delete`,
@@ -211,13 +199,12 @@ export class AdminUserService {
   async bulkUpdateStatus(
     ids: string[],
     status: AdminUserStatus,
-    studioId: string,
   ): Promise<{ updatedCount: number }> {
     if (!ids || ids.length === 0) {
       return { updatedCount: 0 };
     }
     const result = await this.adminUserRepository.update(
-      { id: In(ids), studio: { id: studioId } },
+      { id: In(ids) },
       { status: status },
     );
     return { updatedCount: result.affected || 0 };
@@ -226,16 +213,19 @@ export class AdminUserService {
   async bulkUpdateRole(
     ids: string[],
     roleId: string,
-    studioId: string,
   ): Promise<{ updatedCount: number }> {
     if (!ids || ids.length === 0) {
       return { updatedCount: 0 };
     }
+    // Optional: Validate roleId here if needed
+    // const roleExists = await this.roleRepository.findOneBy({ id: roleId });
+    // if (!roleExists) {
+    //   throw new NotFoundException(`Role with ID "${roleId}" not found for bulk update.`);
+    // }
     const result = await this.adminUserRepository.update(
-      { id: In(ids), studio: { id: studioId } },
+      { id: In(ids) },
       { roleId: roleId },
     );
     return { updatedCount: result.affected || 0 };
   }
 }
-('');

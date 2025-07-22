@@ -1,9 +1,5 @@
 // src/attendance/attendance.service.ts
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { AttendanceRecord } from './attendance.entity';
@@ -11,7 +7,6 @@ import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { Student } from 'src/student/student.entity';
 import { ClassOffering } from 'src/class-offering/class-offering.entity';
 import { NotificationGateway } from 'src/notification/notification.gateway';
-import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Injectable()
 export class AttendanceService {
@@ -28,8 +23,9 @@ export class AttendanceService {
   async findByClassAndDate(
     classOfferingId: string,
     date: string,
-    user: Partial<AdminUser>,
   ): Promise<AttendanceRecord[]> {
+    // Construct a date range for the entire day in UTC.
+    // The frontend sends a local date string (e.g., '2024-07-10'), which `new Date()` parses as UTC midnight.
     const startOfDay = new Date(date);
     const endOfDay = new Date(date);
     endOfDay.setUTCHours(23, 59, 59, 999);
@@ -37,28 +33,19 @@ export class AttendanceService {
     return this.attendanceRepository.find({
       where: {
         classOfferingId,
-        studioId: user.studioId,
         classDateTime: Between(
           startOfDay.toISOString(),
           endOfDay.toISOString(),
         ),
       },
-      relations: ['student'],
+      relations: ['student'], // Optionally load student details
     });
   }
 
-  async upsertAttendance(
-    dto: CreateAttendanceDto,
-    user: Partial<AdminUser>,
-  ): Promise<AttendanceRecord> {
-    const studioId = user.studioId;
-    if (!studioId) {
-      throw new BadRequestException('User is not associated with a studio.');
-    }
-
+  async upsertAttendance(dto: CreateAttendanceDto): Promise<AttendanceRecord> {
+    // Check if student and class offering exist
     const student = await this.studentRepository.findOneBy({
       id: dto.studentId,
-      studioId,
     });
     if (!student) {
       throw new NotFoundException(
@@ -67,7 +54,6 @@ export class AttendanceService {
     }
     const classOffering = await this.classOfferingRepository.findOneBy({
       id: dto.classOfferingId,
-      studioId,
     });
     if (!classOffering) {
       throw new NotFoundException(
@@ -80,20 +66,22 @@ export class AttendanceService {
         studentId: dto.studentId,
         classOfferingId: dto.classOfferingId,
         classDateTime: dto.classDateTime,
-        studioId,
       },
     });
 
     if (record) {
+      // Update existing record
       record.status = dto.status;
       record.notes = dto.notes;
-      record.absenceId = dto.absenceId;
+      record.absenceId = dto.absenceId; // Allow updating absenceId link
     } else {
-      record = this.attendanceRepository.create({ ...dto, studioId });
+      // Create new record
+      record = this.attendanceRepository.create(dto);
     }
     const savedRecord = await this.attendanceRepository.save(record);
 
-    this.notificationGateway.sendNotificationToStudio(studioId, {
+    // Send notification to admin
+    this.notificationGateway.sendNotificationToAll({
       title: 'Attendance Update',
       message: `${student.firstName} ${student.lastName} was marked as ${savedRecord.status} for ${classOffering.name}.`,
       type: 'info',
@@ -105,21 +93,20 @@ export class AttendanceService {
 
   async bulkUpsertAttendance(
     recordsDto: CreateAttendanceDto[],
-    user: Partial<AdminUser>,
   ): Promise<AttendanceRecord[]> {
     const results: AttendanceRecord[] = [];
     for (const dto of recordsDto) {
-      results.push(await this.upsertAttendance(dto, user));
+      // Basic validation for student and class offering can be done here if needed,
+      // or rely on individual upsertAttendance to throw if an ID is invalid.
+      // For bulk operations, it might be better to pre-validate all student/class IDs.
+      results.push(await this.upsertAttendance(dto));
     }
     return results;
   }
 
-  async findOne(
-    id: string,
-    user: Partial<AdminUser>,
-  ): Promise<AttendanceRecord> {
+  async findOne(id: string): Promise<AttendanceRecord> {
     const record = await this.attendanceRepository.findOne({
-      where: { id, studioId: user.studioId },
+      where: { id },
       relations: ['student', 'classOffering', 'absence'],
     });
     if (!record) {

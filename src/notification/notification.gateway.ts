@@ -31,9 +31,8 @@ export class NotificationGateway
   server: Server;
 
   private logger: Logger = new Logger('NotificationGateway');
-  // Map<socketId, { userId: string, studioId: string }>
-  private clients: Map<string, { userId: string; studioId: string }> =
-    new Map();
+  // Map<userId, socketId>
+  private clients: Map<string, string> = new Map();
 
   afterInit(server: Server) {
     this.logger.log('NotificationGateway Initialized');
@@ -45,45 +44,28 @@ export class NotificationGateway
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
-    // Remove the client from the map on disconnect
-    for (const [socketId, clientInfo] of this.clients.entries()) {
+    // Find and remove the user from the map on disconnect
+    for (const [userId, socketId] of this.clients.entries()) {
       if (socketId === client.id) {
-        this.clients.delete(socketId);
-        this.logger.log(
-          `User ${clientInfo.userId} (studio ${clientInfo.studioId}) unregistered`,
-        );
+        this.clients.delete(userId);
+        this.logger.log(`User ${userId} unregistered`);
         break;
       }
     }
   }
 
   @SubscribeMessage('register')
-  handleRegister(
-    client: Socket,
-    payload: { userId: string; studioId: string },
-  ): void {
-    if (!payload || !payload.userId || !payload.studioId) {
-      this.logger.warn(
-        `Client ${client.id} tried to register with invalid payload.`,
-      );
+  handleRegister(client: Socket, userId: string): void {
+    if (!userId) {
+      this.logger.warn(`Client ${client.id} tried to register with no userId.`);
       return;
     }
-    this.logger.log(
-      `Client registered: ${client.id} for user ${payload.userId} in studio ${payload.studioId}`,
-    );
-    this.clients.set(client.id, payload);
+    this.logger.log(`Client registered: ${client.id} for user ${userId}`);
+    this.clients.set(userId, client.id);
   }
 
   sendNotificationToUser(userId: string, payload: ServerNotificationPayload) {
-    // Find the socket ID for the given userId (this assumes a user only has one active socket)
-    let socketId: string | undefined;
-    for (const [sId, clientInfo] of this.clients.entries()) {
-      if (clientInfo.userId === userId) {
-        socketId = sId;
-        break;
-      }
-    }
-
+    const socketId = this.clients.get(userId);
     if (socketId) {
       this.server.to(socketId).emit('notification', payload);
       this.logger.log(
@@ -96,38 +78,15 @@ export class NotificationGateway
     }
   }
 
-  sendNotificationToStudio(
-    studioId: string,
-    payload: ServerNotificationPayload,
-  ) {
-    let sentCount = 0;
-    for (const [socketId, clientInfo] of this.clients.entries()) {
-      if (clientInfo.studioId === studioId) {
-        this.server.to(socketId).emit('notification', payload);
-        sentCount++;
-      }
-    }
-    this.logger.log(
-      `Broadcasted notification to ${sentCount} clients in studio ${studioId}.`,
-    );
+  sendNotificationToAll(payload: ServerNotificationPayload) {
+    this.server.emit('notification', payload);
+    this.logger.log(`Broadcasted notification to all clients.`);
   }
 
-  broadcastDataUpdate(entity: string, payload: any, studioId: string) {
-    let sentCount = 0;
-    for (const [socketId, clientInfo] of this.clients.entries()) {
-      if (clientInfo.studioId === studioId) {
-        this.server.to(socketId).emit('data:update', { entity, payload });
-        sentCount++;
-      }
-    }
+  broadcastDataUpdate(entity: string, payload: any) {
     this.logger.log(
-      `Broadcasting data update for entity: ${entity} with payload ${JSON.stringify(payload)} to ${sentCount} clients in studio ${studioId}.`,
+      `Broadcasting data update for entity: ${entity} with payload ${JSON.stringify(payload)}`,
     );
+    this.server.emit('data:update', { entity, payload });
   }
-
-  // Remove the global sendNotificationToAll as it's no longer multi-tenant
-  // sendNotificationToAll(payload: ServerNotificationPayload) {
-  //   this.server.emit('notification', payload);
-  //   this.logger.log(`Broadcasted notification to all clients.`);
-  // }
 }

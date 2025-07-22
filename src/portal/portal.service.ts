@@ -13,14 +13,10 @@ export class PortalService {
     private studentRepository: Repository<Student>,
   ) {}
 
-  async getProfile(
-    userId: string,
-    userType: 'parent' | 'student',
-    studioId: string,
-  ) {
+  async getProfile(userId: string, userType: 'parent' | 'student') {
     if (userType === 'parent') {
       const parent = await this.parentRepository.findOne({
-        where: { id: userId, studioId },
+        where: { id: userId },
         relations: ['students'], // Make sure this relation exists on Parent entity
       });
       if (!parent) {
@@ -39,10 +35,7 @@ export class PortalService {
       };
     } else {
       // userType is 'student'
-      const student = await this.studentRepository.findOneBy({
-        id: userId,
-        studioId,
-      });
+      const student = await this.studentRepository.findOneBy({ id: userId });
       if (!student) {
         throw new NotFoundException('Student profile not found.');
       }

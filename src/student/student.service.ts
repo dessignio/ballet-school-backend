@@ -15,8 +15,8 @@ import { NotificationGateway } from 'src/notification/notification.gateway';
 import { Parent } from 'src/parent/parent.entity';
 import { Enrollment } from 'src/enrollment/enrollment.entity';
 import { ClassOffering } from 'src/class-offering/class-offering.entity';
-import { AdminUser } from 'src/admin-user/admin-user.entity';
 
+// Define un tipo seguro para el estudiante, excluyendo la contraseña y los métodos internos.
 export type SafeStudent = Omit<
   Student,
   'password' | 'validatePassword' | 'hashPassword'
@@ -38,6 +38,8 @@ export class StudentService {
     private classOfferingRepository: Repository<ClassOffering>,
   ) {}
 
+  // --- MÉTODOS PRIVADOS DE AYUDA ---
+
   private transformToSafeStudent(student: Student): SafeStudent {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...safeStudent } = student;
@@ -52,72 +54,61 @@ export class StudentService {
     startDateString: string,
     durationMonths?: number | null,
   ): string | null {
+    // Explicitly parse the date string as UTC to avoid timezone pitfalls.
+    // '2024-07-15' becomes '2024-07-15T00:00:00.000Z'.
     const startDate = new Date(`${startDateString}T00:00:00Z`);
     if (isNaN(startDate.getTime())) return null;
+
+    // Clone the date to avoid modifying the original
     const renewalDate = new Date(startDate.getTime());
+
     const duration = durationMonths && durationMonths > 0 ? durationMonths : 1;
+    // Perform date arithmetic in UTC
     renewalDate.setUTCMonth(renewalDate.getUTCMonth() + duration);
+
+    // Return the date part of the ISO string (YYYY-MM-DD)
     return renewalDate.toISOString().split('T')[0];
   }
 
-  async findByUsername(
-    username: string,
-    studioId: string,
-  ): Promise<Student | null> {
+  async findByUsername(username: string): Promise<Student | null> {
     return this.studentRepository
       .createQueryBuilder('student')
       .addSelect('student.password')
       .where('student.username = :username', { username })
-      .andWhere('student.studioId = :studioId', { studioId })
       .getOne();
   }
 
-  async create(
-    createStudentDto: CreateStudentDto,
-    user: Partial<AdminUser>,
-  ): Promise<SafeStudent> {
+  // --- MÉTODOS CRUD ---
+
+  async create(createStudentDto: CreateStudentDto): Promise<SafeStudent> {
     const { email, username, membershipPlanId, membershipStartDate, parentId } =
       createStudentDto;
 
-    const studioId = user.studioId;
-    if (!studioId) {
-      throw new BadRequestException('User is not associated with a studio.');
-    }
-
+    // Verificación de conflictos
     if (email) {
       const existingByEmail = await this.studentRepository.findOne({
-        where: { email, studioId },
+        where: { email },
       });
       if (existingByEmail) {
-        throw new ConflictException(
-          `Email "${email}" already exists in this studio.`,
-        );
+        throw new ConflictException(`Email "${email}" already exists.`);
       }
     }
     if (username) {
       const existingByUsername = await this.studentRepository.findOne({
-        where: { username, studioId },
+        where: { username },
       });
       if (existingByUsername) {
-        throw new ConflictException(
-          `Username "${username}" already exists in this studio.`,
-        );
+        throw new ConflictException(`Username "${username}" already exists.`);
       }
     }
 
-    const newStudent = this.studentRepository.create({
-      ...createStudentDto,
-      studioId,
-    });
+    const newStudent = this.studentRepository.create(createStudentDto);
 
     if (parentId) {
-      const parent = await this.parentRepository.findOneBy({
-        id: parentId,
-        studioId,
-      });
+      const parent = await this.parentRepository.findOneBy({ id: parentId });
       if (!parent) {
         throw new BadRequestException(
-          `Parent with ID "${parentId}" not found in this studio.`,
+          `Parent with ID "${parentId}" not found.`,
         );
       }
       newStudent.parentName = `${parent.firstName} ${parent.lastName}`;
@@ -126,13 +117,13 @@ export class StudentService {
     if (membershipPlanId) {
       const plan = await this.membershipPlanRepository.findOneBy({
         id: membershipPlanId,
-        studioId,
       });
       if (!plan) {
         throw new BadRequestException(
-          `Membership plan with ID "${membershipPlanId}" not found in this studio.`,
+          `Membership plan with ID "${membershipPlanId}" not found.`,
         );
       }
+      // Asignamos las propiedades del plan al nuevo estudiante
       newStudent.membershipType = plan.name;
       newStudent.membershipPlanName = plan.name;
       const actualStartDate =
@@ -146,13 +137,9 @@ export class StudentService {
 
     try {
       const savedStudent = await this.studentRepository.save(newStudent);
-      this.notificationGateway.broadcastDataUpdate(
-        'students',
-        {
-          createdId: savedStudent.id,
-        },
-        studioId,
-      );
+      this.notificationGateway.broadcastDataUpdate('students', {
+        createdId: savedStudent.id,
+      });
       return this.transformToSafeStudent(savedStudent);
     } catch (error) {
       if ((error as { code: string }).code === '23505') {
@@ -163,18 +150,17 @@ export class StudentService {
     }
   }
 
-  async findAll(user: Partial<AdminUser>): Promise<SafeStudent[]> {
+  async findAll(): Promise<SafeStudent[]> {
     const students = await this.studentRepository.find({
-      where: { studioId: user.studioId },
       order: { lastName: 'ASC', firstName: 'ASC' },
       relations: ['parent'],
     });
     return this.transformToSafeStudents(students);
   }
 
-  async findOne(id: string, user: Partial<AdminUser>): Promise<SafeStudent> {
+  async findOne(id: string): Promise<SafeStudent> {
     const student = await this.studentRepository.findOne({
-      where: { id, studioId: user.studioId },
+      where: { id },
       relations: ['parent'],
     });
     if (!student) {
@@ -186,13 +172,8 @@ export class StudentService {
   async update(
     id: string,
     updateStudentDto: UpdateStudentDto,
-    user: Partial<AdminUser>,
   ): Promise<SafeStudent> {
-    const studioId = user.studioId; // Puede ser string | undefined
-    const existingStudent = await this.studentRepository.findOneBy({
-      id,
-      studioId,
-    });
+    const existingStudent = await this.studentRepository.findOneBy({ id });
     if (!existingStudent) {
       throw new NotFoundException(`Student with ID "${id}" not found.`);
     }
@@ -215,13 +196,10 @@ export class StudentService {
       if (parentId === null) {
         studentToUpdate.parentName = undefined;
       } else {
-        const parent = await this.parentRepository.findOneBy({
-          id: parentId,
-          studioId,
-        });
+        const parent = await this.parentRepository.findOneBy({ id: parentId });
         if (!parent) {
           throw new BadRequestException(
-            `Parent with ID "${parentId}" not found in this studio.`,
+            `Parent with ID "${parentId}" not found.`,
           );
         }
         studentToUpdate.parentName = `${parent.firstName} ${parent.lastName}`;
@@ -238,11 +216,10 @@ export class StudentService {
       } else {
         const plan = await this.membershipPlanRepository.findOneBy({
           id: membershipPlanId,
-          studioId,
         });
         if (!plan) {
           throw new BadRequestException(
-            `Membership plan with ID "${membershipPlanId}" not found in this studio.`,
+            `Membership plan with ID "${membershipPlanId}" not found.`,
           );
         }
         studentToUpdate.membershipPlanId = plan.id;
@@ -261,7 +238,6 @@ export class StudentService {
     } else if (membershipStartDate && studentToUpdate.membershipPlanId) {
       const plan = await this.membershipPlanRepository.findOneBy({
         id: studentToUpdate.membershipPlanId,
-        studioId,
       });
       if (plan) {
         studentToUpdate.membershipStartDate = membershipStartDate;
@@ -275,35 +251,28 @@ export class StudentService {
     try {
       const savedStudent = await this.studentRepository.save(studentToUpdate);
 
-      // CORRECCIÓN 1: Comprobar que studioId existe antes de usarlo para notificaciones
-      if (studioId) {
-        if (
-          savedStudent.membershipPlanId &&
-          savedStudent.membershipPlanId !== oldPlanId
-        ) {
-          this.notificationGateway.sendNotificationToStudio(studioId, {
-            title: 'Membership Changed',
-            message: `${savedStudent.firstName} ${savedStudent.lastName}'s membership changed to ${savedStudent.membershipPlanName || 'a new plan'}.`,
-            type: 'info',
-            link: `/billing`,
-          });
-        } else if (oldPlanId && !savedStudent.membershipPlanId) {
-          this.notificationGateway.sendNotificationToStudio(studioId, {
-            title: 'Membership Removed',
-            message: `${savedStudent.firstName} ${savedStudent.lastName}'s membership plan (${oldPlanName}) was removed.`,
-            type: 'info',
-            link: `/billing`,
-          });
-        }
-
-        this.notificationGateway.broadcastDataUpdate(
-          'students',
-          {
-            updatedId: savedStudent.id,
-          },
-          studioId,
-        );
+      if (
+        savedStudent.membershipPlanId &&
+        savedStudent.membershipPlanId !== oldPlanId
+      ) {
+        this.notificationGateway.sendNotificationToAll({
+          title: 'Membership Changed',
+          message: `${savedStudent.firstName} ${savedStudent.lastName}'s membership changed to ${savedStudent.membershipPlanName || 'a new plan'}.`,
+          type: 'info',
+          link: `/billing`,
+        });
+      } else if (oldPlanId && !savedStudent.membershipPlanId) {
+        this.notificationGateway.sendNotificationToAll({
+          title: 'Membership Removed',
+          message: `${savedStudent.firstName} ${savedStudent.lastName}'s membership plan (${oldPlanName}) was removed.`,
+          type: 'info',
+          link: `/billing`,
+        });
       }
+
+      this.notificationGateway.broadcastDataUpdate('students', {
+        updatedId: savedStudent.id,
+      });
 
       return this.transformToSafeStudent(savedStudent);
     } catch (error) {
@@ -317,60 +286,42 @@ export class StudentService {
     }
   }
 
-  async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    const student = await this.studentRepository.findOneBy({
-      id,
-      studioId: user.studioId,
-    });
-    if (!student) {
-      throw new NotFoundException(
-        `Student with ID "${id}" not found in this studio.`,
-      );
-    }
-
+  async remove(id: string): Promise<void> {
+    // First, find all enrollments for this student to know which classes to update.
     const enrollments = await this.enrollmentRepository.find({
       where: { studentId: id, status: 'Enrolled' },
     });
 
+    // If there are enrollments, decrement the count for each class offering.
     if (enrollments.length > 0) {
       const classIdsToUpdate = enrollments.map((e) => e.classOfferingId);
       for (const classId of classIdsToUpdate) {
         await this.classOfferingRepository.decrement(
-          { id: classId, studioId: user.studioId },
+          { id: classId },
           'enrolledCount',
           1,
         );
       }
     }
 
-    const result = await this.studentRepository.delete({
-      id,
-      studioId: user.studioId,
-    });
+    // Now, delete the student. The CASCADE constraint on the Enrollment entity
+    // will automatically delete all of this student's enrollment records from the database.
+    const result = await this.studentRepository.delete(id);
 
+    // If no rows were affected, the student was not found.
     if (result.affected === 0) {
       throw new NotFoundException(
         `Student with ID "${id}" not found to delete.`,
       );
     }
 
-    // CORRECCIÓN 2: Usar user.studioId y comprobar que existe
-    if (user.studioId) {
-      this.notificationGateway.broadcastDataUpdate(
-        'students',
-        { deletedId: id },
-        user.studioId,
-      );
-      if (enrollments.length > 0) {
-        this.notificationGateway.broadcastDataUpdate(
-          'classOfferings',
-          {
-            type: 'bulk_update',
-            ids: enrollments.map((e) => e.classOfferingId),
-          },
-          user.studioId,
-        );
-      }
+    // Notify frontend clients about the data change.
+    this.notificationGateway.broadcastDataUpdate('students', { deletedId: id });
+    if (enrollments.length > 0) {
+      this.notificationGateway.broadcastDataUpdate('classOfferings', {
+        type: 'bulk_update',
+        ids: enrollments.map((e) => e.classOfferingId),
+      });
     }
   }
 }

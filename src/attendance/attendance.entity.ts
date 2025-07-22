@@ -16,22 +16,12 @@ import {
   AttendanceStatus,
   AttendanceStatusValues,
 } from './types/attendance-status.type';
-import { Studio } from '../studio/studio.entity';
 
 @Entity('attendance_records')
-@Index(['studentId', 'classOfferingId', 'classDateTime', 'studioId'], {
-  unique: true,
-})
+@Index(['studentId', 'classOfferingId', 'classDateTime'], { unique: true })
 export class AttendanceRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @ManyToOne(() => Studio)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
 
   @Column({ type: 'uuid' })
   studentId: string;

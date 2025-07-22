@@ -4,10 +4,7 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { Studio } from '../studio/studio.entity';
 
 export type ProspectStatus = 'PENDING_EVALUATION' | 'CONVERTED' | 'REJECTED';
 
@@ -15,13 +12,6 @@ export type ProspectStatus = 'PENDING_EVALUATION' | 'CONVERTED' | 'REJECTED';
 export class Prospect {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @ManyToOne(() => Studio, (studio) => studio.prospects)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
 
   @Column({ type: 'varchar', length: 100 })
   firstName: string;

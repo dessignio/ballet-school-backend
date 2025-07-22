@@ -11,8 +11,7 @@ export interface StripeSubscriptionDetails {
     | 'canceled'
     | 'incomplete'
     | 'incomplete_expired'
-    | 'trialing'
-    | 'paused';
+    | 'trialing';
   stripeCustomerId: string;
   items: {
     data: {

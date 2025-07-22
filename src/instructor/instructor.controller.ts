@@ -10,64 +10,42 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
-  UseGuards,
-  Req,
 } from '@nestjs/common';
 import { InstructorService } from './instructor.service';
 import { CreateInstructorDto } from './dto/create-instructor.dto';
 import { UpdateInstructorDto } from './dto/update-instructor.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Request } from 'express';
-import { AdminUser } from 'src/admin-user/admin-user.entity'; // Import AdminUser
 
 @Controller('instructors')
-@UseGuards(JwtAuthGuard)
 export class InstructorController {
   constructor(private readonly instructorService: InstructorService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(
-    @Body() createInstructorDto: CreateInstructorDto,
-    @Req() req: Request,
-  ) {
-    // Apply type assertion
-    return this.instructorService.create(
-      createInstructorDto,
-      req.user as Partial<AdminUser>,
-    );
+  create(@Body() createInstructorDto: CreateInstructorDto) {
+    return this.instructorService.create(createInstructorDto);
   }
 
   @Get()
-  findAll(@Req() req: Request) {
-    // Apply type assertion
-    return this.instructorService.findAll(req.user as Partial<AdminUser>);
+  findAll() {
+    return this.instructorService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    // Apply type assertion
-    return this.instructorService.findOne(id, req.user as Partial<AdminUser>);
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.instructorService.findOne(id);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateInstructorDto: UpdateInstructorDto,
-    @Req() req: Request,
   ) {
-    // Apply type assertion
-    return this.instructorService.update(
-      id,
-      updateInstructorDto,
-      req.user as Partial<AdminUser>,
-    );
+    return this.instructorService.update(id, updateInstructorDto);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    // Apply type assertion
-    return this.instructorService.remove(id, req.user as Partial<AdminUser>);
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.instructorService.remove(id);
   }
 }

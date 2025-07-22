@@ -5,33 +5,24 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { PermissionKey } from './types/permission-key.type';
-import { Studio } from '../studio/studio.entity';
+import { PermissionKey } from './types/permission-key.type'; // Using the defined type
 
 @Entity('roles')
 export class Role {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @ManyToOne(() => Studio, (studio) => studio.roles)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
-
-  @Column({ length: 100 })
+  @Column({ length: 100, unique: true })
   name: string;
 
   @Column({ length: 255, nullable: true })
   description?: string;
 
   @Column({
-    type: 'simple-array',
-    default: '',
+    type: 'text', // In PostgreSQL, this maps to text[]
+    array: true,
+    default: () => "'{}'", // Default to an empty array
   })
   permissions: PermissionKey[]; // Ensure this type aligns with what's stored
 

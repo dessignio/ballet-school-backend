@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 // src/role/dto/create-role.dto.ts
 import {
   IsString,

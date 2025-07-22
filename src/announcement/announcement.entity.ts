@@ -4,10 +4,7 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { Studio } from '../studio/studio.entity';
 
 export type AnnouncementCategory =
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
@@ -17,13 +14,6 @@ export type AnnouncementCategory =
 export class Announcement {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ type: 'uuid', name: 'studio_id' })
-  studioId: string;
-
-  @ManyToOne(() => Studio)
-  @JoinColumn({ name: 'studio_id' })
-  studio: Studio;
 
   @Column({ type: 'varchar', length: 255 })
   title: string;

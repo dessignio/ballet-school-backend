@@ -12,24 +12,11 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
-  UseGuards,
-  Req,
 } from '@nestjs/common';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Request } from 'express';
 
-// Define a type for the JWT payload to ensure type safety
-interface JwtPayload {
-  userId: string;
-  username: string;
-  roleId: string;
-  studioId: string;
-}
-
-@UseGuards(JwtAuthGuard)
 @Controller('roles')
 @UsePipes(
   new ValidationPipe({
@@ -43,38 +30,31 @@ export class RoleController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createRoleDto: CreateRoleDto, @Req() req: Request) {
-    // Apply type assertion before accessing property
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.roleService.create(createRoleDto, studioId);
+  create(@Body() createRoleDto: CreateRoleDto) {
+    return this.roleService.create(createRoleDto);
   }
 
   @Get()
-  findAll(@Req() req: Request) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.roleService.findAll(studioId);
+  findAll() {
+    return this.roleService.findAll();
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.roleService.findOne(id, studioId);
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.roleService.findOne(id);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateRoleDto: UpdateRoleDto,
-    @Req() req: Request,
   ) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.roleService.update(id, updateRoleDto, studioId);
+    return this.roleService.update(id, updateRoleDto);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    const studioId = (req.user as JwtPayload).studioId;
-    return this.roleService.remove(id, studioId);
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.roleService.remove(id);
   }
 }

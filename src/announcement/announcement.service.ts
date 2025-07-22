@@ -1,12 +1,12 @@
 // ballet-school-backend/src/announcement/announcement.service.ts
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Announcement } from './announcement.entity';
+// Changed import paths:
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { UpdateAnnouncementDto } from './dto/update-announcement.dto';
 import { NotificationGateway } from 'src/notification/notification.gateway';
-import { AdminUser } from 'src/admin-user/admin-user.entity';
 
 @Injectable()
 export class AnnouncementService {
@@ -18,20 +18,15 @@ export class AnnouncementService {
 
   async create(
     createAnnouncementDto: CreateAnnouncementDto,
-    user: Partial<AdminUser>,
   ): Promise<Announcement> {
-    const studioId = user.studioId;
-    if (!studioId) {
-      throw new BadRequestException('User is not associated with a studio.');
-    }
-    const newAnnouncement: Announcement = this.announcementRepository.create({
-      ...createAnnouncementDto,
-      studioId,
-    });
+    const newAnnouncement: Announcement = this.announcementRepository.create(
+      createAnnouncementDto,
+    );
     const savedAnnouncement =
       await this.announcementRepository.save(newAnnouncement);
 
-    this.notificationGateway.sendNotificationToStudio(studioId, {
+    // Send notification to all connected clients
+    this.notificationGateway.sendNotificationToAll({
       title: `New Announcement: ${savedAnnouncement.title.substring(0, 30)}...`,
       message: `Category: ${savedAnnouncement.category}. Click to view details.`,
       type: savedAnnouncement.isImportant ? 'warning' : 'info',
@@ -41,9 +36,9 @@ export class AnnouncementService {
     return savedAnnouncement;
   }
 
-  async findAll(user: Partial<AdminUser>): Promise<Announcement[]> {
+  async findAll(): Promise<Announcement[]> {
+    // Order by date descending (newest first), then by importance
     return this.announcementRepository.find({
-      where: { studioId: user.studioId },
       order: {
         date: 'DESC',
         isImportant: 'DESC',
@@ -51,33 +46,31 @@ export class AnnouncementService {
     });
   }
 
-  async findOne(
-    id: string,
-    user: Partial<AdminUser>,
-  ): Promise<Announcement | null> {
-    const announcement = await this.announcementRepository.findOneBy({
-      id,
-      studioId: user.studioId,
-    });
+  async findOne(id: string): Promise<Announcement | null> {
+    const announcement = await this.announcementRepository.findOneBy({ id });
+    // No NotFoundException here, controller can handle it or return null as needed.
     return announcement;
   }
 
   async update(
     id: string,
     updateAnnouncementDto: UpdateAnnouncementDto,
-    user: Partial<AdminUser>,
   ): Promise<Announcement | null> {
     const announcement = await this.announcementRepository.preload({
       id: id,
       ...updateAnnouncementDto,
     });
-    if (!announcement || announcement.studioId !== user.studioId) {
-      return null;
+    if (!announcement) {
+      return null; // Let controller handle NotFound
     }
     return this.announcementRepository.save(announcement);
   }
 
-  async remove(id: string, user: Partial<AdminUser>): Promise<void> {
-    await this.announcementRepository.delete({ id, studioId: user.studioId });
+  async remove(id: string): Promise<void> {
+    const result = await this.announcementRepository.delete(id);
+    if (result.affected === 0) {
+      // No exception needed if not found, delete doesn't fail.
+      // Controller can check existence if 404 on non-existent delete is desired.
+    }
   }
 }
