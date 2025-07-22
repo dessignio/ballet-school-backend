@@ -1,8 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core'; // Import APP_GUARD
 
 // Controladores y Servicios Principales
 import { AppController } from './app.controller';
@@ -10,7 +8,6 @@ import { AppService } from './app.service';
 
 // Módulos de tu Aplicación
 import { AuthModule } from './auth/auth.module'; // Added AuthModule
-import { JwtAuthGuard } from './auth/guards/jwt-auth.guard'; // Added JwtAuthGuard
 import { StudentModule } from './student/student.module';
 import { AnnouncementModule } from './announcement/announcement.module';
 import { ClassOfferingModule } from './class-offering/class-offering.module';
@@ -56,9 +53,12 @@ import { GeneralSettings } from './general-settings/general-settings.entity';
 import { CalendarSettings } from './calendar-settings/calendar-settings.entity';
 import { Prospect } from './prospect/prospect.entity'; // Added Prospect Entity
 import { Parent } from './parent/parent.entity';
+import { AdminUserService } from './admin-user/admin-user.service';
+import { RoleService } from './role/role.service';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([Role, AdminUser]),
     // Módulo de Configuración para leer variables de entorno (.env)
     ConfigModule.forRoot({
       isGlobal: true,
@@ -141,12 +141,6 @@ import { Parent } from './parent/parent.entity';
     SettingsModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
-  ],
+  providers: [AppService, AdminUserService, RoleService],
 })
 export class AppModule {}
